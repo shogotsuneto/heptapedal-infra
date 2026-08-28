@@ -10,6 +10,11 @@ The application repository already publishes to GHCR: the container image
 `ghcr.io/shogotsuneto/charts/heptapedal-app` (likewise for the embeddings
 component). The application repository is private, and so are the packages.
 
+Package visibility is independent of the visibility of *either* repository: this
+infrastructure repository may become public ([0012](0012-treat-the-repository-as-publishable.md))
+while the packages and the application source stay private, and that combination
+works — the credentials that reach them are sealed, not committed in the clear.
+
 Private packages mean two credentials in the cluster:
 
 1. An `imagePullSecret` so nodes can pull the images.
@@ -50,9 +55,10 @@ pull requests.
 ## Alternatives considered
 
 - **Make the packages public.** Removes both credentials, makes artifacts
-  inspectable, and works fine with a private source repository. Not rejected on
-  merit — deferred, to avoid bundling a visibility decision into the initial
-  build-out. The most likely future change.
+  inspectable, and is orthogonal to whether either repository is public. Not
+  rejected on merit — deferred, to avoid bundling a visibility decision into the
+  initial build-out. The most likely future change, and the natural companion to
+  publishing this repository.
 - **DigitalOcean Container Registry.** Would put images in the same account and
   integrate with DOKS's pull-secret provisioning. Rejected: the publish pipeline
   already targets GHCR, the free tier is one repository, and it would split

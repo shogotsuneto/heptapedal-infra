@@ -46,6 +46,17 @@ same Secret name, delete the `SealedSecret`. The application chart does not chan
 - Works with Argo CD with no plugin and no custom sync configuration — SOPS's main
   practical cost here.
 - Git remains the single source of truth, consistent with [0006](0006-gitops-argo-cd-app-of-apps.md).
+- **Safe to publish.** `SealedSecret` manifests are designed to be committed to a
+  public repository, which satisfies
+  [0012](0012-treat-the-repository-as-publishable.md) with nothing to reconsider.
+  Default strict scoping binds each ciphertext to one namespace *and* name, so it
+  cannot be replayed into another cluster or another Secret even verbatim.
+- The corollary: publishing hands an attacker the ciphertext offline. That does
+  not weaken the encryption, but it does raise what a controller-key compromise
+  would cost — every sealed value, historical ones included, becomes readable at
+  once. It makes the key backup below a confidentiality control, not just an
+  availability one: back it up somewhere it cannot leak, and rotate the sealing
+  key on any suspicion.
 - Rotation is manual: re-seal and commit. Acceptable at this secret count; it is
   the thing ESO would fix.
 - Secrets are Kubernetes-only. Nothing outside the cluster can consume them. Fine

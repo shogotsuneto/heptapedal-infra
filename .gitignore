@@ -1,0 +1,39 @@
+# Local planning notes and scratch context — never published.
+# Previously only in .git/info/exclude, which is local-only and travels with
+# neither a clone nor a collaborator. See ADR 0012.
+excluded.d/
+
+# Terraform / OpenTofu state holds every resource attribute in plaintext,
+# including values marked sensitive. It lives in Spaces (ADR 0003), never here.
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl.bak
+crash.log
+crash.*.log
+
+# Variable files routinely carry tokens and connection strings.
+*.tfvars
+*.tfvars.json
+!example.tfvars
+
+# Plan artifacts are as sensitive as state.
+*.tfplan
+plan.out
+plan.json
+
+# Credentials and kubeconfigs.
+kubeconfig
+kubeconfig.*
+*.pem
+*.key
+.env
+.envrc
+
+# Unsealed secret material, staged before `kubeseal`.
+*-unsealed.yaml
+secret-*.yaml
+!sealed-*.yaml
+
+.DS_Store

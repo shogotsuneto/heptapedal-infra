@@ -22,6 +22,12 @@ credentials) lives elsewhere. That reasoning is about blast radius across a team
 Here there is one operator, and the manifest set in (2) is small — the charts live
 elsewhere, so it is a handful of `Application` objects and their values files.
 
+The read-access half of that argument does not apply here at all, in either
+direction: under [0012](0012-treat-the-repository-as-publishable.md) neither
+directory contains anything that read access could compromise. Credentials and
+state live outside git by rule, not by repository setting. So the question reduces
+to workflow ergonomics rather than isolation.
+
 ## Decision
 
 One repository, two top-level directories:
@@ -42,9 +48,15 @@ manifests without read access to the Terraform.
 
 - One clone, one PR, for changes that genuinely span both layers (adding an app
   means a DNS record *and* an `Application`).
-- Argo CD's repository credential grants read access to the Terraform source too.
-  Acceptable: the Terraform contains no secret material (state and variables live
-  outside git), and the repository is private.
+- Argo CD reads the Terraform source as well as the manifests. This is not a
+  concern: the Terraform holds no secret material, by the rule in
+  [0012](0012-treat-the-repository-as-publishable.md) rather than by convention.
+  If the repository is ever made public, Argo CD needs no git credential at all —
+  co-location gets *simpler*, not riskier.
+- CI is the one place co-location has a real cost, and it is a public-repository
+  cost: a workflow that holds cloud credentials sits in the same repository that
+  accepts pull requests. Handled in [0012](0012-treat-the-repository-as-publishable.md)
+  clause 4 — privileged workflows never run against a fork's code.
 - Splitting later is cheap — `git filter-repo` on `gitops/`, then repoint Argo CD.
   Nothing in the design assumes co-location.
 

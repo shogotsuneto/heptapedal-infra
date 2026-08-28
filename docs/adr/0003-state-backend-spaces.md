@@ -29,9 +29,15 @@ Spaces is 5 USD/month — the only line item here that buys no runtime capacity.
 - one key per stack: `platform/terraform.tfstate`, `argocd/terraform.tfstate`
 
 Bootstrap is explicitly two-step and documented in `terraform/bootstrap/`: create
-the bucket with local state, then migrate. `terraform/bootstrap/` keeps its own
-state committed as a checked-in local file, since it holds nothing sensitive and
-is applied roughly once.
+the bucket with local state, then **migrate the bootstrap stack's own state into
+the bucket it just created**. The stack self-hosts; no state file is ever
+committed.
+
+The local state produced during that first apply is transient and
+`.gitignore`d. State records every resource attribute in plaintext — including
+values marked sensitive, and including the Spaces access keys if the stack
+creates them — so "it holds nothing sensitive" is not a claim that survives
+contact with a real bootstrap. See [0012](0012-treat-the-repository-as-publishable.md).
 
 ## Consequences
 
@@ -40,6 +46,10 @@ is applied roughly once.
   as everything else — one credential to rotate.
 - The chicken-and-egg step is visible rather than hidden. That is intentional; it
   is the honest way to show how a state backend actually gets created.
+- Self-hosting the bootstrap state means destroying the bucket orphans the state
+  describing it. Acceptable: the stack is one bucket, and re-importing it is a
+  single `import` block. The alternative — a committed state file — trades that
+  minor inconvenience for a permanent, unfixable-by-deletion entry in git history.
 - Spaces has no cross-region replication here. State loss would mean re-importing;
   bucket versioning is the mitigation, and the resource count is small enough that
   re-import is a bad afternoon, not a disaster.
@@ -54,4 +64,11 @@ is applied roughly once.
 - **HCP Terraform free tier.** Free, managed state, good UI. Rejected: it pulls
   the workflow onto a SaaS control plane, which cuts against [0002](0002-iac-tool-opentofu.md),
   and the run environment becomes another thing to configure.
-- **Committed local state.** Fine for `bootstrap/`, not for anything CI applies.
+- **Committed local state for `bootstrap/`.** The original proposal here, and
+  wrong. State is plaintext and git history is permanent; a file committed while
+  the repository is private is published the day the repository is, retroactively.
+  Rejected under [0012](0012-treat-the-repository-as-publishable.md).
+- **Creating the bucket by hand (console or `doctl`), outside Terraform.** Honest
+  about it being a one-time out-of-band resource, and removes the chicken-and-egg
+  entirely. A reasonable choice; passed over because self-hosting keeps the bucket
+  under the same review and drift-detection as everything else, at similar cost.

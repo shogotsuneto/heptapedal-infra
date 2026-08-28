@@ -48,7 +48,9 @@ point reconciles from `gitops/`. See [ADR 0006](docs/adr/0006-gitops-argo-cd-app
 Every significant choice is recorded in [`docs/adr/`](docs/adr/README.md), with the
 alternatives that were rejected and why. Start there — particularly
 [ADR 0005](docs/adr/0005-gateway-api-envoy-gateway.md), which is the decision that
-drives the most work.
+drives the most work, and
+[ADR 0012](docs/adr/0012-treat-the-repository-as-publishable.md), which constrains
+all of them: nothing here may depend on the repository staying private.
 
 ## Status
 
