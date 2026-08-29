@@ -56,7 +56,7 @@ manifests without read access to the Terraform.
 - CI is the one place co-location has a real cost, and it is a public-repository
   cost: a workflow that holds cloud credentials sits in the same repository that
   accepts pull requests. Handled in [0012](0012-treat-the-repository-as-publishable.md)
-  clause 4 — privileged workflows never run against a fork's code.
+  clause 5 — privileged workflows never run against a fork's code.
 - Splitting later is cheap — `git filter-repo` on `gitops/`, then repoint Argo CD.
   Nothing in the design assumes co-location.
 
