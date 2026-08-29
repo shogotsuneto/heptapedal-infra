@@ -22,7 +22,9 @@ Spaces is 5 USD/month — the only line item here that buys no runtime capacity.
 `s3` backend against DigitalOcean Spaces, with:
 
 - `use_lockfile = true` (no DynamoDB, no `dynamodb_table`)
-- versioning enabled on the bucket, so a corrupted state can be rolled back
+- versioning enabled on the bucket, so a corrupted or overwritten state object can
+  be rolled back
+- `force_destroy = false` on the bucket, and `lifecycle { prevent_destroy = true }`
 - the AWS-isms the provider does not apply to Spaces switched off
   (`skip_credentials_validation`, `skip_metadata_api_check`, `skip_region_validation`,
   `skip_requesting_account_id`)
@@ -46,13 +48,38 @@ contact with a real bootstrap. See [0012](0012-treat-the-repository-as-publishab
   as everything else — one credential to rotate.
 - The chicken-and-egg step is visible rather than hidden. That is intentional; it
   is the honest way to show how a state backend actually gets created.
-- Self-hosting the bootstrap state means destroying the bucket orphans the state
-  describing it. Acceptable: the stack is one bucket, and re-importing it is a
-  single `import` block. The alternative — a committed state file — trades that
-  minor inconvenience for a permanent, unfixable-by-deletion entry in git history.
-- Spaces has no cross-region replication here. State loss would mean re-importing;
-  bucket versioning is the mitigation, and the resource count is small enough that
-  re-import is a bad afternoon, not a disaster.
+- **Self-hosting buys exactly one thing: no state in git history.** Under
+  [0012](0012-treat-the-repository-as-publishable.md) that is decisive on its own.
+  It buys no recovery advantage — see below — and it costs one wart: `tofu destroy`
+  on the bootstrap stack cannot finish cleanly, because after deleting the bucket
+  Terraform tries to persist the resulting state into it and fails, leaving an
+  `errored.tfstate` on disk. Acceptable for a stack that is destroyed
+  approximately never.
+
+### The bucket is a single point of failure for all state
+
+This is the risk that matters, and it is unaffected by where the bootstrap stack
+keeps its own state.
+
+- Losing the bucket does not orphan the bootstrap stack in any interesting sense:
+  the bucket and the state describing it disappear together, so there is nothing
+  left dangling. What it **does** orphan is `platform/` and `argocd/` — a DOKS
+  cluster, node pool, managed Postgres, VPC, firewall, project, and DNS records
+  that all still exist at DigitalOcean with nothing recording them. Recovering
+  that is a full re-import of the platform, not the "single `import` block" an
+  earlier draft of this ADR claimed.
+- A committed bootstrap state would not help. It would let `apply` recreate the
+  bucket — an **empty** one. The contents are what mattered, and they are gone
+  either way. That is why the recovery argument for self-hosting was dropped: it
+  was never true.
+- **Bucket versioning does not protect against this.** It protects an object from
+  being overwritten or deleted; it does nothing about the bucket itself.
+- The protection that actually works is that S3 and Spaces refuse to delete a
+  non-empty bucket. So long as `force_destroy` stays `false`, a `destroy` cannot
+  take the bucket while any other stack's state is in it. `prevent_destroy` is the
+  second belt. **Neither is optional — they are the mitigation.**
+- Beyond that: state is backed up out of band, and the restore is exercised as
+  part of the rebuild runbook rather than assumed.
 
 ## Alternatives considered
 
@@ -67,7 +94,9 @@ contact with a real bootstrap. See [0012](0012-treat-the-repository-as-publishab
 - **Committed local state for `bootstrap/`.** The original proposal here, and
   wrong. State is plaintext and git history is permanent; a file committed while
   the repository is private is published the day the repository is, retroactively.
-  Rejected under [0012](0012-treat-the-repository-as-publishable.md).
+  Rejected under [0012](0012-treat-the-repository-as-publishable.md) — and note
+  that this is the *only* reason it is rejected. On recovery it is a wash, and on
+  clean `destroy` it is marginally better than self-hosting.
 - **Creating the bucket by hand (console or `doctl`), outside Terraform.** Honest
   about it being a one-time out-of-band resource, and removes the chicken-and-egg
   entirely. A reasonable choice; passed over because self-hosting keeps the bucket
