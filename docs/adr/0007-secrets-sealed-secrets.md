@@ -33,19 +33,21 @@ adding one adds a service, an account, and a credential to bootstrap it.**
 - Secret *values* originate from the DigitalOcean, Supabase, GitHub and Grafana
   consoles and are sealed locally with `kubeseal`. They never enter Terraform
   state or CI logs.
-- **No sealed value may lack an external source of truth.** Every secret here is
-  retrievable or reissuable from the service that owns it, so the sealing keys are
-  deliberately **not** backed up: losing them costs a re-seal, not data. Sealing a
-  value whose only copy is the ciphertext — a generated password kept nowhere else
-  — would break that and is not allowed. This is a design invariant, checkable in
-  review, rather than an operational duty that gets forgotten.
+- **The ciphertext is never a value's only copy.** Every secret here is
+  retrievable or reissuable from the service that owns it. Anything that is not —
+  a password generated in-cluster — gets its own home first, a password-manager
+  entry is enough, and is sealed after. Give it a home, then seal it. A design
+  invariant, checkable in review, rather than a duty that gets forgotten.
+- Consequently the sealing keys are deliberately **not** backed up: losing them
+  costs a re-seal, not data.
 - Re-sealing every secret is an explicit step in the cluster rebuild runbook. A
   new cluster means a new controller and new keys, so existing `SealedSecret`
   manifests will not decrypt.
 
 Reconsider when an external secret manager enters the architecture for another
-reason. At that point the migration is: install ESO, point `ExternalSecret` at the
-same Secret name, delete the `SealedSecret`. The application chart does not change.
+reason — including from this side, since enough values needing their own home
+amounts to one. The migration is: install ESO, point `ExternalSecret` at the same
+Secret name, delete the `SealedSecret`. The application chart does not change.
 
 ## Consequences
 
@@ -63,9 +65,6 @@ same Secret name, delete the `SealedSecret`. The application chart does not chan
   every sealed value, historical ones included, readable at once. Which is a
   second reason not to keep a backup: the fewer plaintext copies of the private
   keys exist, the fewer ways that compromise happens.
-- **Losing the keys costs a re-seal, not data**, given the invariant above. That
-  is the whole reason this is affordable: the values live in DigitalOcean,
-  Supabase, GitHub and Grafana, and the ciphertext is a cache of them.
 - What "the key" means in practice: the controller generates an RSA-4096 pair on
   first start and keeps it as a `kubernetes.io/tls` Secret in its namespace, then
   **generates a further pair every 30 days by default**, retaining the old ones
@@ -88,11 +87,11 @@ same Secret name, delete the `SealedSecret`. The application chart does not chan
   encryption in GitOps. Rejected on Argo CD integration friction: it requires a
   plugin, and a config-management plugin is a durable operational cost.
 - **Backing up the controller's private keys out of band.** The conventional
-  advice, and the first version of this ADR. Rejected here: the backup is a
-  plaintext copy of the keys that decrypt every ciphertext this repository
-  publishes, stored somewhere unmanaged and unrotated, and it must be re-taken as
-  the controller rolls new keys. It buys protection only for a value that exists
-  nowhere but the ciphertext — which the invariant above forbids. Revisit **only**
-  if that invariant is ever relaxed.
+  advice, and the first version of this ADR. Rejected on blast radius: to protect
+  a value that exists nowhere but its ciphertext, it puts *every* secret behind
+  one unmanaged, unrotated plaintext copy — of keys that open ciphertext this
+  repository publishes — which must also be re-taken as the controller rolls new
+  keys. Giving that one value its own home instead scopes the exposure to it, and
+  keeps doing so however many such values there are.
 - **Plain Secrets applied by hand, outside git.** Rejected: breaks GitOps, and
   the cluster becomes unreproducible.
