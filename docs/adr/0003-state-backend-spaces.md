@@ -30,16 +30,15 @@ Spaces is 5 USD/month — the only line item here that buys no runtime capacity.
   `skip_requesting_account_id`)
 - one key per stack: `platform/terraform.tfstate`, `argocd/terraform.tfstate`
 
-Bootstrap is explicitly two-step and documented in `terraform/bootstrap/`: create
-the bucket with local state, then **migrate the bootstrap stack's own state into
-the bucket it just created**. The stack self-hosts; no state file is ever
-committed.
+The bucket is a Terraform resource like everything else, in
+`terraform/bootstrap/`, applied once: create it with local state, then migrate
+that state into the bucket it just created. The stack self-hosts, and the
+transient local state is `.gitignore`d rather than committed.
 
-The local state produced during that first apply is transient and
-`.gitignore`d. State records every resource attribute in plaintext — including
-values marked sensitive, and including the Spaces access keys if the stack
-creates them — so "it holds nothing sensitive" is not a claim that survives
-contact with a real bootstrap. See [0012](0012-treat-the-repository-as-publishable.md).
+Managing the bucket in Terraform rather than making it by hand is what puts
+`force_destroy = false`, `prevent_destroy`, and versioning under review and drift
+detection. On a hand-made bucket those are settings someone selected once, with
+nothing re-asserting them.
 
 ## Consequences
 
@@ -48,38 +47,19 @@ contact with a real bootstrap. See [0012](0012-treat-the-repository-as-publishab
   as everything else — one credential to rotate.
 - The chicken-and-egg step is visible rather than hidden. That is intentional; it
   is the honest way to show how a state backend actually gets created.
-- **Self-hosting buys exactly one thing: no state in git history.** Under
-  [0012](0012-treat-the-repository-as-publishable.md) that is decisive on its own.
-  It buys no recovery advantage — see below — and it costs one wart: `tofu destroy`
-  on the bootstrap stack cannot finish cleanly, because after deleting the bucket
-  Terraform tries to persist the resulting state into it and fails, leaving an
-  `errored.tfstate` on disk. Acceptable for a stack that is destroyed
-  approximately never.
-
-### The bucket is a single point of failure for all state
-
-This is the risk that matters, and it is unaffected by where the bootstrap stack
-keeps its own state.
-
-- Losing the bucket does not orphan the bootstrap stack in any interesting sense:
-  the bucket and the state describing it disappear together, so there is nothing
-  left dangling. What it **does** orphan is `platform/` and `argocd/` — a DOKS
-  cluster, node pool, managed Postgres, VPC, firewall, project, and DNS records
-  that all still exist at DigitalOcean with nothing recording them. Recovering
-  that is a full re-import of the platform, not the "single `import` block" an
-  earlier draft of this ADR claimed.
-- A committed bootstrap state would not help. It would let `apply` recreate the
-  bucket — an **empty** one. The contents are what mattered, and they are gone
-  either way. That is why the recovery argument for self-hosting was dropped: it
-  was never true.
-- **Bucket versioning does not protect against this.** It protects an object from
-  being overwritten or deleted; it does nothing about the bucket itself.
-- The protection that actually works is that S3 and Spaces refuse to delete a
-  non-empty bucket. So long as `force_destroy` stays `false`, a `destroy` cannot
-  take the bucket while any other stack's state is in it. `prevent_destroy` is the
-  second belt. **Neither is optional — they are the mitigation.**
-- Beyond that: state is backed up out of band, and the restore is exercised as
-  part of the rebuild runbook rather than assumed.
+- The bucket holds every stack's state, so losing it orphans `platform/` and
+  `argocd/`: a DOKS cluster, managed Postgres, VPC, firewall and DNS records still
+  running at DigitalOcean with nothing recording them. Recovery is a full
+  re-import. Worth being precise about what guards that, because versioning does
+  not — it protects an object from overwrite or deletion, not the bucket. The real
+  guard is that S3 and Spaces refuse to delete a non-empty bucket, so
+  `force_destroy = false` means no `destroy` can take it while any other stack's
+  state is inside. `prevent_destroy` is the second belt. State is also backed up
+  out of band, with the restore exercised in the rebuild runbook.
+- `destroy` on the bootstrap stack cannot finish cleanly: after deleting the
+  bucket, Terraform tries to persist the resulting state into it and fails,
+  leaving an `errored.tfstate`. Expected; the stack is destroyed approximately
+  never.
 
 ## Alternatives considered
 
@@ -91,13 +71,13 @@ keeps its own state.
 - **HCP Terraform free tier.** Free, managed state, good UI. Rejected: it pulls
   the workflow onto a SaaS control plane, which cuts against [0002](0002-iac-tool-opentofu.md),
   and the run environment becomes another thing to configure.
-- **Committed local state for `bootstrap/`.** The original proposal here, and
-  wrong. State is plaintext and git history is permanent; a file committed while
-  the repository is private is published the day the repository is, retroactively.
-  Rejected under [0012](0012-treat-the-repository-as-publishable.md) — and note
-  that this is the *only* reason it is rejected. On recovery it is a wash, and on
-  clean `destroy` it is marginally better than self-hosting.
-- **Creating the bucket by hand (console or `doctl`), outside Terraform.** Honest
-  about it being a one-time out-of-band resource, and removes the chicken-and-egg
-  entirely. A reasonable choice; passed over because self-hosting keeps the bucket
-  under the same review and drift-detection as everything else, at similar cost.
+- **Creating the bucket by hand (console or `doctl`), outside Terraform.** The
+  real alternative: honest that it is a one-time out-of-band resource, and it
+  removes the chicken-and-egg entirely. Rejected because the bucket's protections
+  are the whole game — `force_destroy = false`, `prevent_destroy`, versioning —
+  and by hand they are clicks nobody re-asserts, on the one resource whose loss
+  costs the most. Declaring them buys more than the two-step bootstrap costs.
+- **Committing `bootstrap/`'s state instead of migrating it.** Rejected under
+  [0012](0012-treat-the-repository-as-publishable.md): state is plaintext and git
+  history is permanent, so a file committed while the repository is private is
+  published the day the repository is.
