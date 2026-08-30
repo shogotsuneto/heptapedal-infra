@@ -83,9 +83,17 @@ Secret name, delete the `SealedSecret`. The application chart does not change.
   dependency: it introduces a third-party service, on a free tier, as a hard
   runtime dependency of every deploy — to solve a problem this project does not
   yet have. Recorded explicitly as the intended successor.
-- **SOPS + age.** Elegant, no controller, and the de-facto standard for file-level
-  encryption in GitOps. Rejected on Argo CD integration friction: it requires a
-  plugin, and a config-management plugin is a durable operational cost.
+- **SOPS + age.** Elegant, no controller, the de-facto standard for file-level
+  encryption in GitOps. Rejected on key handling, which cuts directly against the
+  decision above: the age private key is one *you* generate, hold and rotate by
+  hand — rotation re-encrypts every file — and it cannot live in git, so it is
+  precisely the durable plaintext key artifact this ADR declines to keep. Sealed
+  Secrets' key is disposable by comparison: generated, rotated and discarded by
+  the controller, with nothing to protect. The trade does run the other way — the
+  age key outlives the cluster, so a rebuild needs no re-sealing — but re-sealing
+  is cheap here, for the same reason the keys need no backup. Argo CD also needs a
+  plugin (KSOPS, argocd-vault-plugin) to render it: a real cost, but the smaller
+  one.
 - **Backing up the controller's private keys out of band.** The conventional
   advice, and the first version of this ADR. Rejected on blast radius: to protect
   a value that exists nowhere but its ciphertext, it puts *every* secret behind
