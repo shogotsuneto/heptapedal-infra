@@ -1,7 +1,7 @@
 # 0009. Delegate DNS to DigitalOcean; wildcard certs via cert-manager DNS-01
 
 - **Status:** Accepted
-- **Date:** 2026-08-27
+- **Date:** 2026-08-29
 
 ## Context
 

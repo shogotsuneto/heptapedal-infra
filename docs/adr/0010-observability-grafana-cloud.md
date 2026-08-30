@@ -1,7 +1,7 @@
 # 0010. Ship telemetry to Grafana Cloud with Alloy
 
 - **Status:** Accepted
-- **Date:** 2026-08-27
+- **Date:** 2026-08-29
 
 ## Context
 

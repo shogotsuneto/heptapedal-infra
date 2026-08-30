@@ -1,7 +1,7 @@
 # 0006. Deliver with Argo CD using the app-of-apps pattern
 
 - **Status:** Accepted
-- **Date:** 2026-08-27
+- **Date:** 2026-08-29
 
 ## Context
 

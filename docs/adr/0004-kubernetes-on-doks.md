@@ -1,7 +1,7 @@
 # 0004. Run on DOKS with a non-HA control plane
 
 - **Status:** Accepted
-- **Date:** 2026-08-27
+- **Date:** 2026-08-29
 
 ## Context
 

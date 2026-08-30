@@ -1,7 +1,7 @@
 # 0005. Route north-south traffic with Gateway API / Envoy Gateway
 
 - **Status:** Accepted
-- **Date:** 2026-08-27
+- **Date:** 2026-08-29
 
 ## Context
 

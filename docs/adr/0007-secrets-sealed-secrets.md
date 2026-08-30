@@ -1,7 +1,7 @@
 # 0007. Manage secrets with Sealed Secrets
 
 - **Status:** Accepted
-- **Date:** 2026-08-27
+- **Date:** 2026-08-29
 
 ## Context
 

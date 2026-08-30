@@ -1,7 +1,7 @@
 # 0008. Application data on DO Managed Postgres; auth stays on Supabase
 
 - **Status:** Accepted
-- **Date:** 2026-08-27
+- **Date:** 2026-08-29
 
 ## Context
 

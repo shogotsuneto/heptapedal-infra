@@ -1,7 +1,7 @@
 # 0012. Treat this repository as publishable
 
 - **Status:** Accepted
-- **Date:** 2026-08-28
+- **Date:** 2026-08-29
 
 ## Context
 
