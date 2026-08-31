@@ -63,13 +63,13 @@ bucket cannot be deleted. That is deliberate: see the comments in `main.tf`.
 rather than recreating it:
 
 ```bash
-tofu import digitalocean_spaces_bucket.tfstate sgp1,heptapedal-tfstate
+tofu import digitalocean_spaces_bucket.tfstate sfo3,heptapedal-tfstate
 ```
 
 **Bucket names are unique across all of Spaces**, not just this account. If
 `apply` fails on a name collision, change `bucket_name` — and `backend.tf`, which
 cannot reference variables.
 
-**Region** is `sgp1`: DigitalOcean has no Tokyo datacenter, and Singapore is the
-closest one that offers Spaces, DOKS, Managed Postgres and Load Balancers. Every
-other stack should stay in the same region.
+**Region** is `sfo3` — see
+[ADR 0013](../../docs/adr/0013-region-sfo3.md). Every other stack stays in the
+same region.

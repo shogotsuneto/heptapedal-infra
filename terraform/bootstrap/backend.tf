@@ -7,7 +7,7 @@
 terraform {
   backend "s3" {
     endpoints = {
-      s3 = "https://sgp1.digitaloceanspaces.com"
+      s3 = "https://sfo3.digitaloceanspaces.com"
     }
 
     bucket = "heptapedal-tfstate"

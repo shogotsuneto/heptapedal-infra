@@ -9,7 +9,7 @@ output "region" {
 }
 
 output "endpoint" {
-  description = "Regional endpoint, e.g. sgp1.digitaloceanspaces.com. The backend wants it with an https:// prefix."
+  description = "Regional endpoint, e.g. sfo3.digitaloceanspaces.com. The backend wants it with an https:// prefix."
   value       = digitalocean_spaces_bucket.tfstate.endpoint
 }
 

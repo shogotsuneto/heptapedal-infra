@@ -23,6 +23,7 @@ considered" section is the one that earns its keep.
 | [0010](0010-observability-grafana-cloud.md) | Ship telemetry to Grafana Cloud with Alloy | Accepted |
 | [0011](0011-artifact-distribution-ghcr.md) | Keep GHCR packages private for now | Accepted |
 | [0012](0012-treat-the-repository-as-publishable.md) | Treat this repository as publishable | Accepted |
+| [0013](0013-region-sfo3.md) | Run everything in sfo3 | Accepted |
 
 ## Statuses
 

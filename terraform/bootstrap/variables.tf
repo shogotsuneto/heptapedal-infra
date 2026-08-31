@@ -9,10 +9,10 @@ variable "bucket_name" {
 
 variable "region" {
   description = <<-EOT
-    DigitalOcean region. sgp1 is the closest Spaces region to Japan —
-    DigitalOcean has no Tokyo datacenter. Keep it in step with the platform
-    stack: DOKS, Managed Postgres and the Load Balancer all live in one region.
+    DigitalOcean region — see ADR 0013. Every stack lives in one region, so
+    changing this means changing the platform stack too, and the literal in
+    backend.tf that a backend block cannot take from a variable.
   EOT
   type        = string
-  default     = "sgp1"
+  default     = "sfo3"
 }
