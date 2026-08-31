@@ -31,13 +31,20 @@ The region is a variable in every stack, defaulted here, and additionally a
 literal in each `backend.tf`, because a backend block cannot reference
 variables. Changing it means changing both.
 
-Pair the Supabase project's region with this one when it is next set. Login
-latency is not on any hot path — the JWKS is cached and sign-in is occasional —
-so this is a preference, not a constraint.
+The Supabase project is in US East and stays there. The cross-country hop never
+reaches a hot path: the application verifies each request's JWT locally against a
+cached JWKS, so Supabase is called on sign-in, sign-up and password reset only,
+not per request. Moving it would in any case be worse than pointless — `users.id`
+*is* the Supabase user UUID, so a new project re-issues every identity and
+orphans the application's rows.
 
 ## Consequences
 
 - The lowest latency available for the person actually using the system.
+- No effect on [0004](0004-kubernetes-on-doks.md)'s cost model: DigitalOcean
+  publishes one price list with no regional dimension. What varies by datacenter
+  is which Droplet *plans* exist, not what a plan costs, and sfo3 carries the
+  standard shared-CPU line the node pool uses.
 - Application data sits in the United States. That is a real consequence and the
   only serious argument for Toronto; it is accepted because this is personal
   data belonging to the operator, on a project with no third-party users to
