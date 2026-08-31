@@ -39,3 +39,16 @@ output "backend_block" {
     }
   EOT
 }
+
+# The bucket-scoped key for every other stack's backend. Recoverable from state
+# with `tofu output`, so it does not need storing anywhere else.
+output "backend_access_key_id" {
+  description = "AWS_ACCESS_KEY_ID for the s3 backend of every stack."
+  value       = digitalocean_spaces_key.tfstate_backend.access_key
+}
+
+output "backend_secret_access_key" {
+  description = "AWS_SECRET_ACCESS_KEY for the s3 backend of every stack."
+  value       = digitalocean_spaces_key.tfstate_backend.secret_key
+  sensitive   = true
+}

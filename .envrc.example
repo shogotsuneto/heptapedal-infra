@@ -1,15 +1,22 @@
 # Copy to .envrc, fill in, then `direnv allow`. .envrc is gitignored.
 
-# DigitalOcean API token. Creates and manages every resource.
+# DigitalOcean API token. Scopes are listed in terraform/bootstrap/README.md —
+# not Full Access.
 export DIGITALOCEAN_TOKEN=""
 
-# Spaces access key, created by hand in the control panel — see
-# terraform/bootstrap/README.md for why it is not a Terraform resource.
+# Two Spaces keys, with different jobs. See terraform/bootstrap/README.md.
 #
-# The same key pair is needed twice, under two names: the digitalocean provider
-# reads SPACES_*, and the s3 backend reads AWS_*. Setting only one pair fails in
-# a confusing way, so the aliases below are deliberate.
+# SPACES_* — a full-access key, read by the digitalocean provider. Only a
+# full-access key can create a bucket or set its versioning and lifecycle
+# configuration, so this is what `terraform/bootstrap` applies with. Needed
+# roughly never; leave it out of CI.
 export SPACES_ACCESS_KEY_ID=""
 export SPACES_SECRET_ACCESS_KEY=""
-export AWS_ACCESS_KEY_ID="${SPACES_ACCESS_KEY_ID}"
-export AWS_SECRET_ACCESS_KEY="${SPACES_SECRET_ACCESS_KEY}"
+
+# AWS_* — the bucket-scoped key, read by the s3 backend. Created by the
+# bootstrap stack (`tofu output backend_access_key_id` /
+# `tofu output -raw backend_secret_access_key`) and used by every stack, and by
+# CI, on every plan. Scoped to the state bucket so that the credential which
+# lives in GitHub Actions secrets cannot reach the rest of the account.
+export AWS_ACCESS_KEY_ID=""
+export AWS_SECRET_ACCESS_KEY=""
