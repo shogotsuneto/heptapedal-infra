@@ -12,8 +12,39 @@ Run approximately once, by hand, before anything else.
 
 ## Prerequisites
 
-1. **A DigitalOcean API token** — Control panel → API → Tokens, with write scope.
+1. **A DigitalOcean API token** — Control panel → API → Tokens. Not Full Access;
+   the scopes below are what Phase 1 needs, and the token is long-lived because
+   DigitalOcean has no OIDC federation, so give it an expiry and diarise the
+   rotation.
+
+   ```
+   account:read  regions:read  sizes:read  spaces:read
+   project:create     project:read     project:update     project:delete
+   project:assign_resource
+   vpc:create         vpc:read         vpc:update         vpc:delete
+   kubernetes:create  kubernetes:read  kubernetes:update  kubernetes:delete
+   kubernetes:access_cluster
+   database:create    database:read    database:update    database:delete
+   database:view_credentials
+   domain:create      domain:read      domain:update      domain:delete
+   tag:create         tag:read         tag:delete
+   ```
+
+   The two easy to miss are `kubernetes:access_cluster` (retrieves the
+   kubeconfig) and `database:view_credentials` (retrieves the connection URI);
+   without them the platform stack cannot produce its outputs.
+   `load_balancer:*` and `droplet:*` are **not** needed — DOKS creates both with
+   its own credentials.
+
+   cert-manager gets its **own, separate** token later (`domain:read`,
+   `domain:update`), because a token living in the cluster should not carry
+   infrastructure-wide rights.
+
 2. **A Spaces access key** — Control panel → Spaces Object Storage → Access Keys.
+
+   This, not the API token, is what actually creates the bucket: Spaces bucket
+   CRUD goes over the S3 API, which is why DigitalOcean publishes no
+   `spaces:create` scope at all.
 
    Created **by hand, deliberately**: this key is what reads the state, so it
    must not live only inside that state. Terraform can create Spaces keys, but a
