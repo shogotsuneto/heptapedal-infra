@@ -4,13 +4,15 @@
 -- the parts Terraform already does: the database and the app_user role exist as
 -- resources, and DigitalOcean generated the password.
 --
--- The application's migrations (`sqlx migrate run`) create no extensions, so
--- without this they fail on the first table that uses `vector`.
+-- The grants are the part that needs doadmin: app_user has no CREATE on the
+-- schema or the database, cannot grant itself any, and DigitalOcean exposes no
+-- API for it. Without them the migration Job cannot create a single table.
 --
--- This is not in those migrations because `vector` is neither trusted nor
--- installable without superuser, so putting it there would mean granting
--- app_user superuser permanently — the migration Job runs on every deploy — to
--- cover an action needed once. See ../README.md.
+-- The extensions do not need doadmin — DigitalOcean's pgextwlist allowlist lets
+-- app_user create all three — so they could live in the application's
+-- migrations instead. They are here because this file has to exist for the
+-- grants anyway, and splitting database preparation across two places to save
+-- nothing is worse. See ../README.md.
 
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
