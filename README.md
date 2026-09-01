@@ -43,6 +43,38 @@ docs/adr/       # architecture decision records
 Terraform's responsibility stops at the root Application; everything past that
 point reconciles from `gitops/`. See [ADR 0006](docs/adr/0006-gitops-argo-cd-app-of-apps.md).
 
+## Continuous integration
+
+`plan` on every pull request, `apply` on merge, gated by a GitHub Environment
+with a required reviewer. `terraform/bootstrap` is excluded: it needs the
+full-access Spaces key, which is deliberately kept out of CI.
+
+Nothing hands a plan **artifact** between jobs. `-out` and `show -json` contain
+every value unredacted, `sensitive` included, so merging re-plans rather than
+replaying the reviewed plan — a small divergence traded for never persisting a
+credential-bearing file
+([ADR 0012](docs/adr/0012-treat-the-repository-as-publishable.md)). Rendered
+plan text is posted to the pull request with identifiers masked, which is
+hygiene rather than a boundary; the map is accepted as public.
+
+### Setting it up
+
+Two environments, holding credentials with deliberately different power:
+
+| Environment | Runs | DigitalOcean token | Spaces key | Protection |
+|---|---|---|---|---|
+| `plan` | pull requests | `*:read` scopes only | `read` on the state bucket | none |
+| `production` | merges to `main` | the write token | `readwrite` on the state bucket | required reviewer, `main` only |
+
+A workflow that anyone can trigger by opening a pull request therefore holds
+credentials that cannot change anything. `plan` runs with `-lock=false` so the
+read-only Spaces key suffices — taking a lock would mean writing a `.tflock`
+object, and plan writes no state.
+
+Each environment needs `DIGITALOCEAN_TOKEN`, `AWS_ACCESS_KEY_ID` and
+`AWS_SECRET_ACCESS_KEY` as environment secrets. "Prevent self-review" is
+opt-in, so a solo operator can still approve their own deployment.
+
 ## Decisions
 
 Every significant choice is recorded in [`docs/adr/`](docs/adr/README.md), with the
