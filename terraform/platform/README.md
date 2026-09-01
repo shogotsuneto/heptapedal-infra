@@ -91,13 +91,18 @@ Worth confirming against this cluster rather than trusting the reasoning. Read
 the flags rather than attempting anything — `pg_available_extension_versions`
 carries them straight from each control file:
 
-```sql
+```bash
+kubectl run pg-check --rm -i --restart=Never --image=postgres:17-alpine \
+  --env="PGURL=$(tofu output -raw database_admin_url)" \
+  -- sh -c 'psql "$PGURL"' <<'SQL'
 SELECT name, version, superuser, trusted
   FROM pg_available_extension_versions
- WHERE name IN ('vector', 'pgcrypto', 'pg_trgm');
+ WHERE name IN ('vector', 'pgcrypto', 'pg_trgm')
+ ORDER BY name, version;
 
 SELECT rolname, rolsuper, rolcreatedb
   FROM pg_roles WHERE rolname IN ('app_user', 'doadmin');
+SQL
 ```
 
 `vector` showing `trusted = false` with `superuser = true` confirms the
@@ -139,10 +144,39 @@ Verify:
 ```bash
 kubectl run pg-check --rm -i --restart=Never --image=postgres:17-alpine \
   --env="PGURL=$(tofu output -raw database_admin_url)" \
-  -- psql "$PGURL" -c '\dx'
+  -- sh -c 'psql "$PGURL" -c \dx'
 ```
 
 `vector`, `pgcrypto` and `pg_trgm` should be listed.
+
+Note the `sh -c '...'` with single quotes in both commands. Writing
+`-- psql "$PGURL"` instead would expand `$PGURL` in the *local* shell, where it
+is not set — so psql would receive an empty argument. Single quotes defer the
+expansion to the pod, where the `--env` value lives, and keep the credential off
+the local command line and out of shell history.
+
+### Getting a psql prompt another way
+
+`kubectl port-forward` targets a Pod or Service in the cluster and cannot reach
+an external host, so it does not by itself get you to a managed database. Put a
+relay in the cluster and it does — useful when you want your own `psql` rather
+than one inside a throwaway pod:
+
+```bash
+HOST=$(tofu output -raw database_host)
+PORT=$(tofu output database_port)
+
+kubectl run pgproxy --image=alpine/socat --port=5432 \
+  -- tcp-listen:5432,fork,reuseaddr tcp-connect:$HOST:$PORT
+kubectl port-forward pod/pgproxy 5432:5432
+
+# elsewhere
+psql "postgresql://app_user:...@localhost:5432/hepta?sslmode=require"
+kubectl delete pod pgproxy
+```
+
+`sslmode=require` encrypts without verifying the hostname, so connecting through
+`localhost` works. `verify-full` would not.
 
 `database_admin_url` is `doadmin`. It exists for this step and for
 troubleshooting; the application connects as `app_user` through
