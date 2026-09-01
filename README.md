@@ -69,18 +69,23 @@ Two environments, holding credentials with deliberately different power:
 
 | Environment | Runs | DigitalOcean token | Spaces key | Protection |
 |---|---|---|---|---|
-| `plan` | pull requests | `*:read` scopes only | `read` on the state bucket | none |
+| `plan` | pull requests | `*:read` scopes only, no `kubernetes:access_cluster` | `read` on the state bucket | none |
 | `production` | merges to `main` | the write token | `readwrite` on the state bucket | `main` only (reviewer when public) |
 
 A workflow that anyone can trigger by opening a pull request therefore holds
-credentials that cannot change much. **One caveat:** planning the `argocd` stack
-requires `kubernetes:access_cluster`, because it reads the cluster through a
-data source and refreshes a Helm release. That scope returns an
-administrator kubeconfig, so the `plan` token is read-only against the
-DigitalOcean API but not against the cluster it can then reach. Narrowing it
-would mean a separate Kubernetes ServiceAccount — which would still need to read
-the Helm release Secret, so it buys less than it looks like. Recorded rather
-than hidden. The `plan` job takes its environment
+credentials that cannot change anything.
+
+Keeping that true costs one thing: **the `argocd` stack is not planned on pull
+requests.** Planning it needs `kubernetes:access_cluster`, which returns an
+*administrator* kubeconfig — read-only against the DigitalOcean API, but not
+against the cluster it then reaches. Rather than quietly widen the plan
+credentials, that stack is validated without credentials in the `check` job and
+first planned by its own apply run, where the plan is visible before anything
+changes.
+
+`check` runs `fmt` and `init -backend=false && validate` over **every** stack,
+including `bootstrap`, which CI never applies. It needs no secrets, so it is
+also the part that is safe on a pull request from a fork. The `plan` job takes its environment
 with `deployment: false`, so it gets the secrets without recording a deployment
 — planning is not deploying, and the environment history stays a list of things
 that actually changed. `plan` runs with `-lock=false` so the
