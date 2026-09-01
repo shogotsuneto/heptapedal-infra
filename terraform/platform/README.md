@@ -73,11 +73,29 @@ Propagation is usually well under an hour but the registrar's TTL governs it.
 Certificate issuance in #11 uses a DNS-01 challenge and cannot succeed until
 this has taken effect, which is why it runs early.
 
-**Nothing is being migrated.** The zone at Namecheap held only parking records —
-an apex `A` to Namecheap's parking IP and a `www` CNAME into it. There is no
-`MX`, `TXT`, `AAAA` or anything else, so no mail routing, SPF/DKIM or domain
-verification is at stake. Re-check with `dig` before switching if that may have
-changed.
+**Email authentication is migrated, and it is load-bearing.** Four records in
+`dns-email.tf` carry Resend — Supabase's custom SMTP — and therefore the
+sign-up confirmation and password-reset links. Sign-up is email-first, so
+breaking them breaks the only way to create an account.
+
+| Name | Type | Purpose |
+|---|---|---|
+| `send` | TXT | SPF for the custom MAIL FROM domain |
+| `send` | MX | SES bounce and complaint handling |
+| `resend._domainkey` | TXT | DKIM public key |
+| `_dmarc` | TXT | DMARC policy |
+
+They are replicated verbatim, TTLs included. **Apply before switching**, then
+confirm DigitalOcean answers for all four (see the verification step above) —
+the switch is only safe once it does.
+
+Everything else in the Namecheap zone is a parking placeholder: an apex `A` to
+Namecheap's parking IP and a `www` CNAME into it, both deliberately dropped.
+
+**Confirm against the registrar, not only `dig`.** Querying can only probe names
+you think to ask for; it cannot enumerate a zone. The email records above were
+nearly missed for exactly that reason. Read Namecheap's Advanced DNS page and
+reconcile it against `dns-email.tf` before changing nameservers.
 
 **The domain stops resolving until #20.** After delegation the zone has CAA
 records and nothing else — no apex `A` — because there is no Load Balancer to
