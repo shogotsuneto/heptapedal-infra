@@ -62,9 +62,15 @@ Run approximately once, by hand, before anything else.
    Both keys are created by hand. Terraform can manage Spaces keys, but doing so
    would mean granting the API token `spaces_key:create` and
    `create_credentials` — the ability to mint a full-access key — which would
-   undo the scoping for anyone holding the token. Store the secret where
-   [ADR 0007](../../docs/adr/0007-secrets-sealed-secrets.md)'s invariant says
-   to: give it a home, since it is shown once.
+   undo the scoping for anyone holding the token.
+
+   Neither secret needs storing. Both are shown once, and both are reissuable
+   from the control panel, which satisfies
+   [ADR 0007](../../docs/adr/0007-secrets-sealed-secrets.md)'s invariant without
+   a copy. Nothing binds to a key's ID: the backend reads `AWS_*` from the
+   environment rather than naming a key, and DigitalOcean does not accept
+   bucket policies against limited-access keys. Losing one costs a reissue and
+   an edit to `.envrc` — and, later, the GitHub Actions secret.
 
    Created **by hand, deliberately**: this key is what reads the state, so it
    must not live only inside that state. Terraform can create Spaces keys, but a
