@@ -47,9 +47,14 @@ output "cluster_version" {
   value       = digitalocean_kubernetes_cluster.heptapedal.version
 }
 
-# For `kubectl` by hand. Expires — see the note on cluster_name.
+# A snapshot, not a live credential: `tofu output` reads state and never calls
+# the API, so this is whatever the last apply captured and it stops working
+# seven days after that. `doctl kubernetes cluster kubeconfig save heptapedal`
+# is the way to get working credentials — it writes an exec-plugin kubeconfig
+# that renews itself. Kept only as the fallback when doctl is unavailable; see
+# README.md.
 output "kubeconfig" {
-  description = "Raw kubeconfig. Credentials expire after 7 days; re-run `tofu output` to refresh."
+  description = "Kubeconfig as of the last apply. Stale 7 days later — prefer `doctl kubernetes cluster kubeconfig save`."
   value       = digitalocean_kubernetes_cluster.heptapedal.kube_config[0].raw_config
   sensitive   = true
 }
