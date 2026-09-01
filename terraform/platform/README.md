@@ -66,9 +66,26 @@ that way, with `docker/init.sql` running as the superuser at container init and
 `sqlx migrate run` separate from it. This is that split carried into production,
 not a new line.
 
-Worth confirming empirically rather than trusting the reasoning: try
-`CREATE EXTENSION vector` as `app_user` once the cluster is up. If it succeeds,
-this decision deserves revisiting.
+Worth confirming against this cluster rather than trusting the reasoning. Read
+the flags rather than attempting anything — `pg_available_extension_versions`
+carries them straight from each control file:
+
+```sql
+SELECT name, version, superuser, trusted
+  FROM pg_available_extension_versions
+ WHERE name IN ('vector', 'pgcrypto', 'pg_trgm');
+
+SELECT rolname, rolsuper, rolcreatedb
+  FROM pg_roles WHERE rolname IN ('app_user', 'doadmin');
+```
+
+`vector` showing `trusted = false` with `superuser = true` confirms the
+reasoning above. Anything else — including DigitalOcean having granted
+`app_user` more than expected — is worth revisiting the decision over.
+
+Prefer this to attempting `CREATE EXTENSION`, which is only conclusive *before*
+the bootstrap has run: afterwards `IF NOT EXISTS` returns success without ever
+reaching a privilege check, so a passing attempt would prove nothing.
 
 The application's migrations create no extensions of their own, so without this
 step they fail on the first table that uses `vector`.
@@ -82,6 +99,19 @@ kubectl run pg-bootstrap --rm -i --restart=Never \
 
 It is idempotent — `CREATE EXTENSION IF NOT EXISTS` and repeated `GRANT`s — so
 running it again after a restore or a rebuild is safe.
+
+**Why this stays manual.** It could be automated: once Argo CD exists, the same
+SQL runs from a sync-wave-ordered Job inside the cluster, which satisfies the
+firewall the same way this pod does. The price is `doadmin` living permanently
+in the cluster as a sealed Secret — a credential that can do anything to the
+database, resident forever to cover something that runs about once per database
+lifetime. Against that, one documented step alongside the nameserver delegation
+and the Spaces keys is the better trade. Revisit if rebuilds become frequent, or
+if a second database arrives.
+
+DigitalOcean offers no API, `doctl` command or control-panel toggle for
+extensions, so SQL from somewhere the firewall trusts is the only route either
+way.
 
 Verify:
 
