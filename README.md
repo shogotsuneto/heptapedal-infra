@@ -73,7 +73,10 @@ Two environments, holding credentials with deliberately different power:
 | `production` | merges to `main` | the write token | `readwrite` on the state bucket | `main` only (reviewer when public) |
 
 A workflow that anyone can trigger by opening a pull request therefore holds
-credentials that cannot change anything. `plan` runs with `-lock=false` so the
+credentials that cannot change anything. The `plan` job takes its environment
+with `deployment: false`, so it gets the secrets without recording a deployment
+— planning is not deploying, and the environment history stays a list of things
+that actually changed. `plan` runs with `-lock=false` so the
 read-only Spaces key suffices — taking a lock would mean writing a `.tflock`
 object, and plan writes no state.
 
