@@ -86,6 +86,13 @@ idempotent, so re-running it after a restore or a rebuild is safe.
 application connects as `app_user` through `database_url`, which becomes its
 sealed `DATABASE_URL` in #17.
 
+> Plans carry a standing `~ user = "doadmin" -> null` under *Objects have
+> changed outside of OpenTofu*. It is a provider bug — `user` is assigned from
+> the API's connection object unconditionally, while `password` is guarded by a
+> non-empty check, and that object reads back with an empty user. Nothing is
+> wrong with the cluster. `database_admin_url` no longer reads that attribute,
+> so the noise stays noise; see the comment in `database.tf`.
+
 ### Getting a psql prompt
 
 `kubectl port-forward` targets a Pod or Service *in the cluster* and cannot

@@ -29,6 +29,27 @@ resource "digitalocean_database_cluster" "heptapedal" {
   # sources of truth would fight on every apply.
 }
 
+# The cluster's `user` attribute empties itself on refresh, which is the
+# recurring "changed outside of OpenTofu" line on every plan:
+#
+#   ~ user = "doadmin" -> null
+#
+# The provider sets it unconditionally from the API's connection object, and
+# that object comes back with an empty user on a plain read. `password` escapes
+# the same fate only because that one assignment is guarded by a non-empty
+# check:
+#
+#   d.Set("user", database.Connection.User)              // unconditional
+#   if database.Connection.Password != "" { ... }        // guarded
+#
+# Cosmetic in the plan, but not cosmetic in an output built from it: once an
+# apply persists the null, database_admin_url would render with no username.
+# DigitalOcean always names the default PostgreSQL role `doadmin`, so use the
+# constant rather than an attribute that erases itself.
+locals {
+  database_admin_user = "doadmin"
+}
+
 resource "digitalocean_database_db" "hepta" {
   cluster_id = digitalocean_database_cluster.heptapedal.id
   name       = var.database_name
