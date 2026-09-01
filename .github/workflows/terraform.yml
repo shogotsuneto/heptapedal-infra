@@ -125,8 +125,11 @@ jobs:
     needs: version
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    # Write credentials, a required reviewer, and main only. The approval gate
-    # is where the run's own fresh plan gets read before anything changes.
+    # Write credentials, and main only. Protection rules — a required reviewer
+    # between merge and apply — need a public repository on this plan, so for
+    # now merging is what approves: the gate is the pull request and its plan
+    # comment. The environment still earns its place by keeping these
+    # credentials out of the pull-request job. Reviewer goes on with #28.
     environment: production
     strategy:
       fail-fast: false
