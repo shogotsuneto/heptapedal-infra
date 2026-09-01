@@ -72,7 +72,13 @@ jobs:
     # Read-only DigitalOcean token, read-only Spaces key. A workflow anyone can
     # trigger by opening a pull request should not hold credentials that can
     # change anything.
-    environment: plan
+    #
+    # `deployment: false` takes the environment for its secrets without
+    # recording a deployment: planning is not deploying, and every pull request
+    # logging one buries the entries that are.
+    environment:
+      name: plan
+      deployment: false
     permissions:
       contents: read
       pull-requests: write
