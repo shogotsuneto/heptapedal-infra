@@ -1,0 +1,22 @@
+# Copy to .envrc, fill in, then `direnv allow`. .envrc is gitignored.
+
+# DigitalOcean API token. Scopes are listed in terraform/bootstrap/README.md —
+# not Full Access.
+export DIGITALOCEAN_TOKEN=""
+
+# Two Spaces keys, with different jobs. See terraform/bootstrap/README.md.
+#
+# SPACES_* — a full-access key, read by the digitalocean provider. Only a
+# full-access key can create a bucket or set its versioning and lifecycle
+# configuration, so this is what `terraform/bootstrap` applies with. Needed
+# roughly never; leave it out of CI.
+export SPACES_ACCESS_KEY_ID=""
+export SPACES_SECRET_ACCESS_KEY=""
+
+# AWS_* — a Limited Access key granting Read/Write/Delete on the state bucket
+# and nothing else, read by the s3 backend. Used by every stack, and by CI, on
+# every plan. Scoped so that the credential which lives in GitHub Actions
+# secrets reaches one bucket rather than the account. Create it by hand after
+# the bucket exists.
+export AWS_ACCESS_KEY_ID=""
+export AWS_SECRET_ACCESS_KEY=""
