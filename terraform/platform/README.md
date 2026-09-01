@@ -41,6 +41,113 @@ providers with it. It looks the cluster up by name with a
 `digitalocean_kubernetes_cluster` data source instead, which reissues
 credentials on every read. `cluster_name` is exported for exactly that.
 
+## Database bootstrap
+
+Terraform creates the cluster, the `hepta` database, the `app_user` role and the
+firewall. The **extensions** are a separate, one-time step, for two reasons.
+
+**Terraform has no connection.** Creating an extension needs SQL, and the
+firewall trusts only the Kubernetes cluster — deliberately, since an operator IP
+or a CI runner in that list would be the hole the rule exists to avoid. So the
+bootstrap runs from inside the cluster instead.
+
+**And it needs privileges the application must not keep.** PostgreSQL 13
+onwards lets a non-superuser install a *trusted* extension given `CREATE` on the
+database. `pgcrypto` and `pg_trgm` qualify. **`vector` does not** — pgvector's
+control file sets neither `trusted` nor `superuser`, and DigitalOcean documents
+a class of "superuser-only and untrusted extensions" whose use requires
+assigning superuser. So doing this from the application's migrations would mean
+granting `app_user` superuser permanently, because the migration Job runs on
+every deploy, to cover an action needed once.
+
+That asymmetry is the argument, not tidiness: extensions are substrate — what
+kind of database this is — rather than schema. The application already models it
+that way, with `docker/init.sql` running as the superuser at container init and
+`sqlx migrate run` separate from it. This is that split carried into production,
+not a new line.
+
+Worth confirming against this cluster rather than trusting the reasoning. Read
+the flags rather than attempting anything — `pg_available_extension_versions`
+carries them straight from each control file:
+
+```sql
+SELECT name, version, superuser, trusted
+  FROM pg_available_extension_versions
+ WHERE name IN ('vector', 'pgcrypto', 'pg_trgm');
+
+SELECT rolname, rolsuper, rolcreatedb
+  FROM pg_roles WHERE rolname IN ('app_user', 'doadmin');
+```
+
+`vector` showing `trusted = false` with `superuser = true` confirms the
+reasoning above. Anything else — including DigitalOcean having granted
+`app_user` more than expected — is worth revisiting the decision over.
+
+Prefer this to attempting `CREATE EXTENSION`, which is only conclusive *before*
+the bootstrap has run: afterwards `IF NOT EXISTS` returns success without ever
+reaching a privilege check, so a passing attempt would prove nothing.
+
+The application's migrations create no extensions of their own, so without this
+step they fail on the first table that uses `vector`.
+
+```bash
+kubectl run pg-bootstrap --rm -i --restart=Never \
+  --image=postgres:17-alpine \
+  --env="PGURL=$(tofu output -raw database_admin_url)" \
+  -- sh -c 'psql "$PGURL"' < sql/bootstrap.sql
+```
+
+It is idempotent — `CREATE EXTENSION IF NOT EXISTS` and repeated `GRANT`s — so
+running it again after a restore or a rebuild is safe.
+
+**Why this stays manual.** It could be automated: once Argo CD exists, the same
+SQL runs from a sync-wave-ordered Job inside the cluster, which satisfies the
+firewall the same way this pod does. The price is `doadmin` living permanently
+in the cluster as a sealed Secret — a credential that can do anything to the
+database, resident forever to cover something that runs about once per database
+lifetime. Against that, one documented step alongside the nameserver delegation
+and the Spaces keys is the better trade. Revisit if rebuilds become frequent, or
+if a second database arrives.
+
+DigitalOcean offers no API, `doctl` command or control-panel toggle for
+extensions, so SQL from somewhere the firewall trusts is the only route either
+way.
+
+Verify:
+
+```bash
+kubectl run pg-check --rm -i --restart=Never --image=postgres:17-alpine \
+  --env="PGURL=$(tofu output -raw database_admin_url)" \
+  -- psql "$PGURL" -c '\dx'
+```
+
+`vector`, `pgcrypto` and `pg_trgm` should be listed.
+
+`database_admin_url` is `doadmin`. It exists for this step and for
+troubleshooting; the application connects as `app_user` through
+`database_url`, which is what becomes its sealed `DATABASE_URL` in #17.
+
+The failure mode if this is skipped is a migration erroring with
+`type "vector" does not exist`, which does not point at its cause. A guard
+migration in the application repo would turn that into a message naming this
+file — tracked as a follow-up there, and it needs no privileges of its own since
+it only reads `pg_extension`.
+
+### Backups
+
+Daily automatic backups with point-in-time recovery to any second in the
+previous seven days, via WAL archiving. Not configurable on this plan, and not
+something Terraform manages — but it is the reason
+[ADR 0008](../../docs/adr/0008-postgres-do-managed.md) chose a managed database
+over the in-cluster StatefulSet that already exists in the application chart.
+
+### Version parity
+
+Production runs PostgreSQL 17; local development runs `pgvector/pgvector:pg16`
+in docker-compose and Kind. Worth closing by bumping the local image rather than
+holding production back, but that is an application-repo change and is not done
+yet.
+
 ## DNS delegation
 
 `heptapedal.com` stays registered at Namecheap; DigitalOcean serves the zone

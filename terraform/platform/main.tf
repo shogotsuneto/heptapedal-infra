@@ -11,6 +11,7 @@ resource "digitalocean_project" "heptapedal" {
   resources = [
     digitalocean_kubernetes_cluster.heptapedal.urn,
     digitalocean_domain.heptapedal.urn,
+    digitalocean_database_cluster.heptapedal.urn,
   ]
 }
 

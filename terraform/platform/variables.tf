@@ -46,6 +46,37 @@ variable "kubernetes_version_prefix" {
   default     = "1.36."
 }
 
+variable "postgres_version" {
+  description = <<-EOT
+    Major version of the managed PostgreSQL cluster.
+
+    Note the divergence from local development, which runs
+    `pgvector/pgvector:pg16` in docker-compose and Kind. Worth closing by
+    bumping the local image rather than holding production back, but it is an
+    application-repo change and is not done yet.
+  EOT
+  type        = string
+  default     = "17"
+}
+
+variable "database_size" {
+  description = "Single node, 1 GiB — 15 USD/month. See ADR 0008."
+  type        = string
+  default     = "db-s-1vcpu-1gb"
+}
+
+variable "database_name" {
+  description = "Application database, matching what local development uses."
+  type        = string
+  default     = "hepta"
+}
+
+variable "database_user" {
+  description = "Role the application connects as. Not the cluster's doadmin."
+  type        = string
+  default     = "app_user"
+}
+
 variable "node_size" {
   description = "Worker Droplet size. 2 of these is 48 USD/month — see ADR 0004's costing."
   type        = string
