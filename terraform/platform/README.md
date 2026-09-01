@@ -44,14 +44,34 @@ credentials on every read. `cluster_name` is exported for exactly that.
 ## Database bootstrap
 
 Terraform creates the cluster, the `hepta` database, the `app_user` role and the
-firewall. It cannot create the **extensions**: that needs a SQL connection, and
-the firewall trusts only the Kubernetes cluster — deliberately, since an
-operator IP or a CI runner in that list would be the hole the rule exists to
-avoid.
+firewall. The **extensions** are a separate, one-time step, for two reasons.
 
-So the one-time bootstrap runs from inside the cluster. The application's
-migrations create no extensions of their own, so without this they fail on the
-first table that uses `vector`.
+**Terraform has no connection.** Creating an extension needs SQL, and the
+firewall trusts only the Kubernetes cluster — deliberately, since an operator IP
+or a CI runner in that list would be the hole the rule exists to avoid. So the
+bootstrap runs from inside the cluster instead.
+
+**And it needs privileges the application must not keep.** PostgreSQL 13
+onwards lets a non-superuser install a *trusted* extension given `CREATE` on the
+database. `pgcrypto` and `pg_trgm` qualify. **`vector` does not** — pgvector's
+control file sets neither `trusted` nor `superuser`, and DigitalOcean documents
+a class of "superuser-only and untrusted extensions" whose use requires
+assigning superuser. So doing this from the application's migrations would mean
+granting `app_user` superuser permanently, because the migration Job runs on
+every deploy, to cover an action needed once.
+
+That asymmetry is the argument, not tidiness: extensions are substrate — what
+kind of database this is — rather than schema. The application already models it
+that way, with `docker/init.sql` running as the superuser at container init and
+`sqlx migrate run` separate from it. This is that split carried into production,
+not a new line.
+
+Worth confirming empirically rather than trusting the reasoning: try
+`CREATE EXTENSION vector` as `app_user` once the cluster is up. If it succeeds,
+this decision deserves revisiting.
+
+The application's migrations create no extensions of their own, so without this
+step they fail on the first table that uses `vector`.
 
 ```bash
 kubectl run pg-bootstrap --rm -i --restart=Never \
@@ -76,6 +96,12 @@ kubectl run pg-check --rm -i --restart=Never --image=postgres:17-alpine \
 `database_admin_url` is `doadmin`. It exists for this step and for
 troubleshooting; the application connects as `app_user` through
 `database_url`, which is what becomes its sealed `DATABASE_URL` in #17.
+
+The failure mode if this is skipped is a migration erroring with
+`type "vector" does not exist`, which does not point at its cause. A guard
+migration in the application repo would turn that into a message naming this
+file — tracked as a follow-up there, and it needs no privileges of its own since
+it only reads `pg_extension`.
 
 ### Backups
 

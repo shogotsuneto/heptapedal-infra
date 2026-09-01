@@ -6,6 +6,11 @@
 --
 -- The application's migrations (`sqlx migrate run`) create no extensions, so
 -- without this they fail on the first table that uses `vector`.
+--
+-- This is not in those migrations because `vector` is neither trusted nor
+-- installable without superuser, so putting it there would mean granting
+-- app_user superuser permanently — the migration Job runs on every deploy — to
+-- cover an action needed once. See ../README.md.
 
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
