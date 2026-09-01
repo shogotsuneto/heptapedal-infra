@@ -92,7 +92,7 @@ output "database_admin_url" {
   description = "doadmin connection URL, for the one-time extension bootstrap only."
   value = format(
     "postgresql://%s:%s@%s:%d/%s?sslmode=require",
-    digitalocean_database_cluster.heptapedal.user,
+    local.database_admin_user,
     digitalocean_database_cluster.heptapedal.password,
     digitalocean_database_cluster.heptapedal.private_host,
     digitalocean_database_cluster.heptapedal.port,
