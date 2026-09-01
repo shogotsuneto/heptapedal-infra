@@ -83,25 +83,36 @@ Run approximately once, by hand, before anything else.
 
 ## Step 1 — create the bucket, with local state
 
-`backend.tf` is already committed, so skip backend initialisation for this pass:
+`backend.tf` is committed and active, and the bucket it names does not exist
+yet. Override it for this one pass: OpenTofu merges `*_override.tf` over the
+main configuration, replacing the backend block wholesale.
 
 ```bash
 cd terraform/bootstrap
-tofu init -backend=false
+printf 'terraform {\n  backend "local" {}\n}\n' > local_override.tf
+tofu init
 tofu apply
 ```
 
+`local_override.tf` is gitignored, so `main` never holds a stack whose backend
+is commented out or missing — the deviation is local and temporary.
+
 The state file this leaves behind is transient and gitignored. Do not commit it.
+
+> `tofu init -backend=false` does **not** work here. It skips backend
+> *initialisation*, but `apply` still sees the backend block in the
+> configuration and refuses to run against an uninitialised backend.
 
 Now create the bucket-scoped key (prerequisite 3) and put it in `.envrc` as
 `AWS_*` — the backend, not the provider, is what uses it.
 
 ## Step 2 — move the state into the bucket
 
-With `AWS_*` now set to the scoped key:
+Drop the override and migrate:
 
 ```bash
-tofu init -migrate-state    # answer yes when asked to copy the existing state
+rm local_override.tf
+tofu init -migrate-state    # detects local -> s3; answer yes to copy the state
 rm terraform.tfstate*       # the local copy, now superseded
 ```
 

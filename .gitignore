@@ -18,6 +18,14 @@ crash.*.log
 *.tfvars.json
 !example.tfvars
 
+# Local-only configuration overrides. OpenTofu merges these over the main
+# configuration automatically, which is how bootstrap swaps the backend for its
+# first apply (see terraform/bootstrap/README.md).
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
 # Plan artifacts are as sensitive as state.
 *.tfplan
 plan.out
