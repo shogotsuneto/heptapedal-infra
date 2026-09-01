@@ -53,3 +53,45 @@ output "kubeconfig" {
   value       = digitalocean_kubernetes_cluster.heptapedal.kube_config[0].raw_config
   sensitive   = true
 }
+
+# --- database ---------------------------------------------------------------
+
+output "database_host" {
+  description = "Private hostname. Reachable only from inside the VPC."
+  value       = digitalocean_database_cluster.heptapedal.private_host
+}
+
+output "database_port" {
+  value = digitalocean_database_cluster.heptapedal.port
+}
+
+# What becomes DATABASE_URL in the application's sealed Secret (#17). Built by
+# hand rather than taken from the cluster's `private_uri`, because that one
+# carries doadmin and the default database.
+output "database_url" {
+  description = "DATABASE_URL for the application, as app_user over the private network."
+  value = format(
+    "postgresql://%s:%s@%s:%d/%s?sslmode=require",
+    digitalocean_database_user.app.name,
+    digitalocean_database_user.app.password,
+    digitalocean_database_cluster.heptapedal.private_host,
+    digitalocean_database_cluster.heptapedal.port,
+    digitalocean_database_db.hepta.name,
+  )
+  sensitive = true
+}
+
+# doadmin, for the one-time bootstrap in README.md — creating extensions needs
+# more than the application's role has. Not for the application to use.
+output "database_admin_url" {
+  description = "doadmin connection URL, for the one-time extension bootstrap only."
+  value = format(
+    "postgresql://%s:%s@%s:%d/%s?sslmode=require",
+    digitalocean_database_cluster.heptapedal.user,
+    digitalocean_database_cluster.heptapedal.password,
+    digitalocean_database_cluster.heptapedal.private_host,
+    digitalocean_database_cluster.heptapedal.port,
+    digitalocean_database_db.hepta.name,
+  )
+  sensitive = true
+}

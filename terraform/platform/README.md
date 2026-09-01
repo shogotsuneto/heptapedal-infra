@@ -41,6 +41,57 @@ providers with it. It looks the cluster up by name with a
 `digitalocean_kubernetes_cluster` data source instead, which reissues
 credentials on every read. `cluster_name` is exported for exactly that.
 
+## Database bootstrap
+
+Terraform creates the cluster, the `hepta` database, the `app_user` role and the
+firewall. It cannot create the **extensions**: that needs a SQL connection, and
+the firewall trusts only the Kubernetes cluster — deliberately, since an
+operator IP or a CI runner in that list would be the hole the rule exists to
+avoid.
+
+So the one-time bootstrap runs from inside the cluster. The application's
+migrations create no extensions of their own, so without this they fail on the
+first table that uses `vector`.
+
+```bash
+kubectl run pg-bootstrap --rm -i --restart=Never \
+  --image=postgres:17-alpine \
+  --env="PGURL=$(tofu output -raw database_admin_url)" \
+  -- sh -c 'psql "$PGURL"' < sql/bootstrap.sql
+```
+
+It is idempotent — `CREATE EXTENSION IF NOT EXISTS` and repeated `GRANT`s — so
+running it again after a restore or a rebuild is safe.
+
+Verify:
+
+```bash
+kubectl run pg-check --rm -i --restart=Never --image=postgres:17-alpine \
+  --env="PGURL=$(tofu output -raw database_admin_url)" \
+  -- psql "$PGURL" -c '\dx'
+```
+
+`vector`, `pgcrypto` and `pg_trgm` should be listed.
+
+`database_admin_url` is `doadmin`. It exists for this step and for
+troubleshooting; the application connects as `app_user` through
+`database_url`, which is what becomes its sealed `DATABASE_URL` in #17.
+
+### Backups
+
+Daily automatic backups with point-in-time recovery to any second in the
+previous seven days, via WAL archiving. Not configurable on this plan, and not
+something Terraform manages — but it is the reason
+[ADR 0008](../../docs/adr/0008-postgres-do-managed.md) chose a managed database
+over the in-cluster StatefulSet that already exists in the application chart.
+
+### Version parity
+
+Production runs PostgreSQL 17; local development runs `pgvector/pgvector:pg16`
+in docker-compose and Kind. Worth closing by bumping the local image rather than
+holding production back, but that is an application-repo change and is not done
+yet.
+
 ## DNS delegation
 
 `heptapedal.com` stays registered at Namecheap; DigitalOcean serves the zone
