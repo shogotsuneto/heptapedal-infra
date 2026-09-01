@@ -8,6 +8,18 @@ output "vpc_id" {
   value       = digitalocean_vpc.heptapedal.id
 }
 
+output "domain_name" {
+  description = "The DNS zone DigitalOcean serves once delegation has propagated."
+  value       = digitalocean_domain.heptapedal.name
+}
+
+# Fixed for every DigitalOcean zone, so this is a convenience rather than a
+# lookup: it is what goes into Namecheap's custom-nameserver fields.
+output "nameservers" {
+  description = "Set these as the domain's nameservers at the registrar."
+  value       = ["ns1.digitalocean.com", "ns2.digitalocean.com", "ns3.digitalocean.com"]
+}
+
 output "cluster_id" {
   description = "DOKS cluster UUID — what a database firewall rule trusts by resource type."
   value       = digitalocean_kubernetes_cluster.heptapedal.id
