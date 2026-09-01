@@ -12,6 +12,11 @@
 #
 # `terraform/bootstrap` is deliberately absent. It needs the full-access Spaces
 # key, which is kept out of CI, and it is applied roughly once by hand.
+#
+# The stacks therefore have an ordering dependency CI does not express: argocd
+# needs platform's cluster to exist. That only bites on a from-scratch build,
+# which CI cannot do anyway with bootstrap excluded — the rebuild runbook (#24)
+# applies them by hand in order.
 name: terraform
 
 on:
@@ -85,7 +90,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        stack: [platform] # argocd joins in #8
+        stack: [platform, argocd]
     env:
       DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -141,7 +146,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        stack: [platform]
+        stack: [platform, argocd]
     env:
       DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
