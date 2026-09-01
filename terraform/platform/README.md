@@ -52,7 +52,8 @@ otherwise the nameservers point at a provider with nothing to answer from and
 the domain resolves to nothing.
 
 1. `tofu apply` — creates the zone and its CAA records.
-2. At Namecheap, set the domain to custom nameservers:
+2. At Namecheap: **Domain List → Manage → Nameservers**, switch from
+   *Namecheap BasicDNS* to *Custom DNS*, and enter:
 
    ```
    ns1.digitalocean.com
@@ -62,6 +63,17 @@ the domain resolves to nothing.
 
    Also available as `tofu output nameservers`.
 
+   **Not the Advanced DNS tab.** Delegating an apex domain rewrites the `NS`
+   records in the *parent* zone — the `.com` registry — which is what the
+   registrar's nameserver setting controls. `NS` records added inside the
+   Namecheap-hosted zone do nothing, because the parent still points every
+   resolver at Namecheap. (Delegating a *subdomain* is the case where in-zone
+   `NS` records are the mechanism; that is not this.)
+
+   **Do not delete anything at Namecheap.** Switching to Custom DNS leaves the
+   BasicDNS zone stored but unused, so reverting the nameserver setting is a
+   working rollback. Keep that available until delegation is verified.
+
 3. Wait, then verify:
 
    ```bash
@@ -69,9 +81,32 @@ the domain resolves to nothing.
    dig CAA heptapedal.com +short         # expect letsencrypt.org
    ```
 
-Propagation is usually well under an hour but the registrar's TTL governs it.
-Certificate issuance in #11 uses a DNS-01 challenge and cannot succeed until
-this has taken effect, which is why it runs early.
+### How long, and what happens meanwhile
+
+The registry push is quick — minutes — but the `.com` zone publishes this
+domain's delegation with a **48 hour TTL**:
+
+```
+$ dig @a.gtld-servers.net NS heptapedal.com
+heptapedal.com.  172800  IN  NS  dns1.registrar-servers.com.
+```
+
+So a resolver that already cached the old delegation may keep asking Namecheap
+for up to two days. Most refresh sooner, but plan for 48 hours rather than
+treating a stale answer as a failure.
+
+During that window **both zones are live**, each serving whichever resolvers
+still point at it. That is survivable precisely because the two agree on the
+records that matter: the four email records are replicated verbatim, so mail
+authentication holds no matter which nameserver answers. It is also the reason
+not to delete anything at Namecheap yet — doing so would make the transition a
+cliff instead of an overlap.
+
+The apex is the one place they disagree: Namecheap answers with a parking page,
+DigitalOcean with nothing until #20. Nobody depends on either.
+
+Certificate issuance in #11 uses a DNS-01 challenge and cannot succeed until the
+delegation has taken effect, which is why this runs early.
 
 **Email authentication is migrated, and it is load-bearing.** Four records in
 `dns-email.tf` carry Resend — Supabase's custom SMTP — and therefore the
@@ -89,8 +124,13 @@ They are replicated verbatim, TTLs included. **Apply before switching**, then
 confirm DigitalOcean answers for all four (see the verification step above) —
 the switch is only safe once it does.
 
-Everything else in the Namecheap zone is a parking placeholder: an apex `A` to
-Namecheap's parking IP and a `www` CNAME into it, both deliberately dropped.
+Everything else in the Namecheap zone is deliberately not carried across:
+
+| Record | Why not |
+|---|---|
+| apex `A` → `192.64.119.97` | Namecheap's parking page |
+| `www` → `parkingpage.namecheap.com` | the same parking page |
+| `NS`, `SOA` | belong to whoever hosts the zone; DigitalOcean creates its own |
 
 **Confirm against the registrar, not only `dig`.** Querying can only probe names
 you think to ask for; it cannot enumerate a zone. The email records above were
