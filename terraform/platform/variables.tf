@@ -20,6 +20,12 @@ variable "vpc_ip_range" {
   default     = "10.20.0.0/16"
 }
 
+variable "domain" {
+  description = "Registered at Namecheap; DNS served by DigitalOcean. See ADR 0009."
+  type        = string
+  default     = "heptapedal.com"
+}
+
 variable "cluster_name" {
   description = "DOKS cluster name. Also how later stacks look the cluster up for fresh credentials — see outputs.tf."
   type        = string

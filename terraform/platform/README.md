@@ -41,6 +41,49 @@ providers with it. It looks the cluster up by name with a
 `digitalocean_kubernetes_cluster` data source instead, which reissues
 credentials on every read. `cluster_name` is exported for exactly that.
 
+## DNS delegation
+
+`heptapedal.com` stays registered at Namecheap; DigitalOcean serves the zone
+([ADR 0009](../../docs/adr/0009-dns-and-tls.md)). Terraform creates the zone,
+but the delegation itself is a manual step at the registrar.
+
+**Apply before switching.** The zone has to exist at DigitalOcean first,
+otherwise the nameservers point at a provider with nothing to answer from and
+the domain resolves to nothing.
+
+1. `tofu apply` — creates the zone and its CAA records.
+2. At Namecheap, set the domain to custom nameservers:
+
+   ```
+   ns1.digitalocean.com
+   ns2.digitalocean.com
+   ns3.digitalocean.com
+   ```
+
+   Also available as `tofu output nameservers`.
+
+3. Wait, then verify:
+
+   ```bash
+   dig NS heptapedal.com +short          # expect the three above
+   dig CAA heptapedal.com +short         # expect letsencrypt.org
+   ```
+
+Propagation is usually well under an hour but the registrar's TTL governs it.
+Certificate issuance in #11 uses a DNS-01 challenge and cannot succeed until
+this has taken effect, which is why it runs early.
+
+**Nothing is being migrated.** The zone at Namecheap held only parking records —
+an apex `A` to Namecheap's parking IP and a `www` CNAME into it. There is no
+`MX`, `TXT`, `AAAA` or anything else, so no mail routing, SPF/DKIM or domain
+verification is at stake. Re-check with `dig` before switching if that may have
+changed.
+
+**The domain stops resolving until #20.** After delegation the zone has CAA
+records and nothing else — no apex `A` — because there is no Load Balancer to
+point at yet. Expected, not a fault. It replaces a parking page, so nothing of
+value is lost in the interval.
+
 ## Things that will cost money if changed carelessly
 
 - **`ha = false` is load-bearing.** On Kubernetes 1.36 and later the provider
