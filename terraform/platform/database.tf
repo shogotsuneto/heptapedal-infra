@@ -40,6 +40,19 @@ resource "digitalocean_database_db" "hepta" {
 resource "digitalocean_database_user" "app" {
   cluster_id = digitalocean_database_cluster.heptapedal.id
   name       = var.database_user
+
+  lifecycle {
+    # Works around digitalocean/terraform-provider-digitalocean#1437, open and
+    # unfixed since 2025-09. Creating a user without `settings` still writes a
+    # dummy one into state (`acl: []`, `opensearch_acl: []`), so the next plan
+    # tries to remove it and the apply fails: the provider sends the update with
+    # no `user_settings`, and the API rejects it with a 400.
+    #
+    # We manage no settings, so ignoring them costs nothing. Drop this when the
+    # upstream issue closes — the provider bump will arrive as a Renovate pull
+    # request (#21), which is the moment to check.
+    ignore_changes = [settings]
+  }
 }
 
 # Trusts the Kubernetes cluster as a resource, not as a set of addresses. Node
