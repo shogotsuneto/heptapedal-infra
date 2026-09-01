@@ -27,9 +27,7 @@ Run approximately once, by hand, before anything else.
    database:create    database:read    database:update    database:delete
    database:view_credentials
    domain:create      domain:read      domain:update      domain:delete
-   tag:create         tag:read          tag:delete
-   spaces_key:create  spaces_key:read   spaces_key:update  spaces_key:delete
-   spaces_key:create_credentials
+   tag:create         tag:read         tag:delete
    ```
 
    The two easy to miss are `kubernetes:access_cluster` (retrieves the
@@ -51,11 +49,22 @@ Run approximately once, by hand, before anything else.
    create a bucket or set its versioning and lifecycle configuration — a
    bucket-limited key cannot, however permissive its grant.
 
-   That is why this stack also **issues a second, bucket-scoped key** for
-   everything else. The full-access key applies this stack, by hand, roughly
-   never. The scoped key is what every stack's backend uses on every plan, and
-   what ends up in GitHub Actions secrets — so it is limited to the state bucket
-   and cannot reach the rest of the account.
+   Used only to apply this stack, by hand, roughly never.
+
+3. **A bucket-scoped Spaces key** — same screen, Limited Access, granting
+   Read/Write/Delete on the state bucket and nothing else. Create it after step
+   1, once the bucket exists.
+
+   This is the one that does the work: every stack's backend uses it on every
+   plan, and it is what will sit in GitHub Actions secrets. Scoping it means a
+   leak of the credential in CI reaches one bucket rather than the account.
+
+   Both keys are created by hand. Terraform can manage Spaces keys, but doing so
+   would mean granting the API token `spaces_key:create` and
+   `create_credentials` — the ability to mint a full-access key — which would
+   undo the scoping for anyone holding the token. Store the secret where
+   [ADR 0007](../../docs/adr/0007-secrets-sealed-secrets.md)'s invariant says
+   to: give it a home, since it is shown once.
 
    Created **by hand, deliberately**: this key is what reads the state, so it
    must not live only inside that state. Terraform can create Spaces keys, but a
@@ -63,9 +72,8 @@ Run approximately once, by hand, before anything else.
    reasoning as [ADR 0007](../../docs/adr/0007-secrets-sealed-secrets.md) — never
    let the ciphertext be the only copy.
 
-3. Copy `.envrc.example` from the repository root to `.envrc` and
-   `direnv allow`. Set `DIGITALOCEAN_TOKEN` and the full-access key as
-   `SPACES_*`; the `AWS_*` pair comes from step 1's output.
+4. Copy `.envrc.example` from the repository root to `.envrc` and
+   `direnv allow`. `SPACES_*` is the full-access key, `AWS_*` the scoped one.
 
 ## Step 1 — create the bucket, with local state
 
@@ -79,13 +87,8 @@ tofu apply
 
 The state file this leaves behind is transient and gitignored. Do not commit it.
 
-This also issues the bucket-scoped backend key. Put it in `.envrc` before
-continuing — the backend, not the provider, is what uses it:
-
-```bash
-tofu output backend_access_key_id
-tofu output -raw backend_secret_access_key
-```
+Now create the bucket-scoped key (prerequisite 3) and put it in `.envrc` as
+`AWS_*` — the backend, not the provider, is what uses it.
 
 ## Step 2 — move the state into the bucket
 
@@ -120,11 +123,6 @@ rather than recreating it:
 ```bash
 tofu import digitalocean_spaces_bucket.tfstate sfo3,heptapedal-tfstate
 ```
-
-**The scoped key is recoverable, not shown-once.** It lives in this stack's
-state, so `tofu output -raw backend_secret_access_key` retrieves it whenever CI
-or another machine needs it. Reading that state uses the key itself — or the
-full-access key, if it is the scoped one you have lost.
 
 **Bucket names are unique across all of Spaces**, not just this account. If
 `apply` fails on a name collision, change `bucket_name` — and `backend.tf`, which

@@ -39,22 +39,3 @@ resource "digitalocean_spaces_bucket" "tfstate" {
     }
   }
 }
-
-# The credential every *other* stack's backend uses, scoped to this bucket alone.
-#
-# It cannot replace the full-access key this stack runs with: only a full-access
-# key can create a bucket or set its configuration (versioning, lifecycle), and
-# those are exactly what the resource above does. So the two keys have genuinely
-# different jobs — full access is used by hand, for this stack, roughly never;
-# this one is used constantly, by every stack and by CI.
-#
-# Splitting them is the point. The key that ends up in GitHub Actions secrets
-# should not be able to reach, reconfigure or delete every bucket in the account.
-resource "digitalocean_spaces_key" "tfstate_backend" {
-  name = "${var.bucket_name}-backend"
-
-  grant {
-    bucket     = digitalocean_spaces_bucket.tfstate.name
-    permission = "readwrite"
-  }
-}
