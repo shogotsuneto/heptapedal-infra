@@ -29,13 +29,34 @@ plane is up; nodes may still be joining.
 
 ## kubectl access
 
+Use `doctl`, not the Terraform output:
+
 ```bash
-tofu output -raw kubeconfig > ~/.kube/heptapedal.yaml
-KUBECONFIG=~/.kube/heptapedal.yaml kubectl get nodes
+doctl kubernetes cluster kubeconfig save heptapedal
+kubectl get nodes
 ```
 
-**These credentials expire after 7 days.** Re-run the command to mint fresh
-ones. This is also why the Argo CD stack does not consume a kubeconfig output:
+DigitalOcean issues cluster credentials with a **7 day expiry**. Given no
+`--expiry-seconds`, `doctl` writes a kubeconfig that authenticates through an
+`exec` credential plugin calling `doctl` itself, so `kubectl` renews on demand
+and nothing goes stale.
+
+**`tofu output -raw kubeconfig` does not do this.** `output` reads the state
+file and nothing else — it does not contact the API, which is why it needs no
+provider credentials — so it returns the kubeconfig captured at the **last
+apply**, and that stops working seven days later. Refreshing first would fetch a
+new one:
+
+```bash
+tofu apply -refresh-only      # re-reads the cluster, rewriting state
+tofu output -raw kubeconfig
+```
+
+but that rewrites state on every use, needs the write credentials, and gets you
+a copy that starts ageing immediately. `doctl` is the answer; this is the
+fallback when it is not installed.
+
+The same expiry is why the Argo CD stack does not consume a kubeconfig output:
 a token captured in state goes stale and takes the `kubernetes` and `helm`
 providers with it. It looks the cluster up by name with a
 `digitalocean_kubernetes_cluster` data source instead, which reissues
