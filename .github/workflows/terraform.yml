@@ -1,0 +1,152 @@
+# Plan on pull request, apply on merge.
+#
+# Two things from ADR 0012 (the repository must be safe to make public) shape
+# this workflow:
+#
+#   * The plan *artifact* never leaves the job. `-out` and `show -json` carry
+#     every value unredacted, `sensitive` included, so nothing is handed between
+#     jobs or uploaded. Merging re-plans rather than replaying a reviewed plan —
+#     a small divergence traded for never persisting a credential-bearing file.
+#   * Rendered plan text is public, and accepted as such. It is masked
+#     best-effort before posting: hygiene, not a boundary.
+#
+# `terraform/bootstrap` is deliberately absent. It needs the full-access Spaces
+# key, which is kept out of CI, and it is applied roughly once by hand.
+name: terraform
+
+on:
+  pull_request:
+    paths:
+      - terraform/**
+      - .github/workflows/terraform.yml
+      - .github/scripts/plan-comment.sh
+      - .tool-versions
+  push:
+    branches: [main]
+    paths:
+      - terraform/**
+      - .github/workflows/terraform.yml
+      - .github/scripts/plan-comment.sh
+      - .tool-versions
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-${{ github.event_name == 'push' && 'apply' || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # One source of truth for the OpenTofu version: .tool-versions, which is also
+  # what a local asdf/mise reads.
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      tofu: ${{ steps.read.outputs.tofu }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: read
+        run: echo "tofu=$(awk '/^opentofu /{print $2}' .tool-versions)" >> "$GITHUB_OUTPUT"
+
+  # Needs no credentials, so it is safe on a pull request from a fork — and it
+  # covers bootstrap, which the plan matrix does not.
+  fmt:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: opentofu/setup-opentofu@v2
+        with:
+          tofu_version: ${{ needs.version.outputs.tofu }}
+          tofu_wrapper: false
+      - run: tofu fmt -check -recursive -diff terraform/
+
+  plan:
+    needs: version
+    # ADR 0012 clause 5: a workflow holding credentials never runs against a
+    # fork's code.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    # Read-only DigitalOcean token, read-only Spaces key. A workflow anyone can
+    # trigger by opening a pull request should not hold credentials that can
+    # change anything.
+    environment: plan
+    permissions:
+      contents: read
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: [platform] # argocd joins in #8
+    env:
+      DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: opentofu/setup-opentofu@v2
+        with:
+          tofu_version: ${{ needs.version.outputs.tofu }}
+          tofu_wrapper: false
+
+      - run: tofu init -input=false
+        working-directory: terraform/${{ matrix.stack }}
+
+      - run: tofu validate
+        working-directory: terraform/${{ matrix.stack }}
+
+      # -lock=false is what lets the read-only Spaces key suffice: taking a lock
+      # would mean writing a .tflock object. Safe — plan does not write state.
+      - name: Plan
+        id: plan
+        working-directory: terraform/${{ matrix.stack }}
+        run: |
+          set +e
+          tofu plan -input=false -lock=false -no-color -detailed-exitcode > plan.txt 2>&1
+          echo "exitcode=$?" >> "$GITHUB_OUTPUT"
+          cat plan.txt
+
+      - name: Comment
+        working-directory: terraform/${{ matrix.stack }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STACK: ${{ matrix.stack }}
+          EXITCODE: ${{ steps.plan.outputs.exitcode }}
+          PR: ${{ github.event.pull_request.number }}
+        run: "$GITHUB_WORKSPACE/.github/scripts/plan-comment.sh"
+
+      - name: Fail if the plan errored
+        if: steps.plan.outputs.exitcode == '1'
+        run: exit 1
+
+  apply:
+    needs: version
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    # Write credentials, and main only. Protection rules — a required reviewer
+    # between merge and apply — need a public repository on this plan, so for
+    # now merging is what approves: the gate is the pull request and its plan
+    # comment. The environment still earns its place by keeping these
+    # credentials out of the pull-request job. Reviewer goes on with #28.
+    environment: production
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        stack: [platform]
+    env:
+      DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: opentofu/setup-opentofu@v2
+        with:
+          tofu_version: ${{ needs.version.outputs.tofu }}
+          tofu_wrapper: false
+      - run: tofu init -input=false
+        working-directory: terraform/${{ matrix.stack }}
+      - run: tofu apply -input=false -auto-approve -lock-timeout=5m
+        working-directory: terraform/${{ matrix.stack }}
