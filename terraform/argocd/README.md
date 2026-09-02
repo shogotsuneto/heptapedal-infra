@@ -52,10 +52,27 @@ Plain HTTP, because `server.insecure` is set: the only path to this service is
 already inside the cluster, and when it is eventually published the Gateway will
 terminate TLS ([ADR 0005](../../docs/adr/0005-gateway-api-envoy-gateway.md)).
 
-> The CLI needs **`--plaintext`**, not `--insecure`. `--insecure` skips
-> certificate verification but still speaks TLS, so against a plaintext server
-> the handshake is reset — which kills the port-forward with
-> `lost connection to pod` rather than reporting a protocol mismatch.
+### The CLI forwards for itself
+
+Do **not** point the CLI at a `kubectl port-forward`. Two things bite:
+
+1. `--insecure` is the wrong flag. It skips certificate verification but still
+   speaks TLS; against a plaintext server the handshake is reset. The flag that
+   disables TLS is `--plaintext`.
+2. Even with `--plaintext`, the CLI's gRPC connection does not survive
+   `kubectl port-forward` here — it drops with `lost connection to pod`. The
+   browser is unaffected, so this looks like a broken cluster rather than a
+   broken tunnel.
+
+Let the CLI manage its own forward instead, and set the flags once:
+
+```bash
+export ARGOCD_OPTS="--port-forward --port-forward-namespace argocd --plaintext"
+argocd login --username admin
+```
+
+`ARGOCD_OPTS` is parsed into the same persistent flags, so every later `argocd`
+command in that shell inherits it — including `argocd repo add` below.
 
 The initial admin password:
 
@@ -68,7 +85,6 @@ kubectl -n argocd get secret argocd-initial-admin-secret \
 cluster in plaintext until removed:
 
 ```bash
-argocd login localhost:8080 --plaintext --username admin
 argocd account update-password
 kubectl -n argocd delete secret argocd-initial-admin-secret
 ```
@@ -124,8 +140,6 @@ ssh-keygen -t ed25519 -C "argocd@heptapedal" -f /tmp/argocd-deploy-key -N ""
 # GitHub: repository -> Settings -> Deploy keys -> Add
 #   paste /tmp/argocd-deploy-key.pub, leave "Allow write access" unchecked
 
-kubectl -n argocd port-forward svc/argocd-server 8080:80   # in another shell
-argocd login localhost:8080 --plaintext --username admin
 argocd repo add git@github.com:shogotsuneto/heptapedal-infra.git \
   --ssh-private-key-path /tmp/argocd-deploy-key
 
