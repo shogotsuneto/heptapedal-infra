@@ -1,0 +1,30 @@
+# The applications. heptapedal joins in #18; a second service later has only to
+# add a directory here (ADR 0006).
+#
+# Wave 1 — after the platform bundle reports Healthy, so an application is never
+# deployed into a cluster with no Gateway to route to it and no certificate to
+# serve it.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: apps
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/shogotsuneto/heptapedal-infra.git
+    targetRevision: main
+    path: gitops/apps
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

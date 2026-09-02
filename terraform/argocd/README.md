@@ -1,8 +1,13 @@
 # argocd
 
-Installs Argo CD, and nothing else. From here the root Application (#9) takes
-over and the rest of the platform arrives through GitOps rather than Terraform
-([ADR 0006](../../docs/adr/0006-gitops-argo-cd-app-of-apps.md)).
+Installs Argo CD and **one** Application. From there the rest of the platform
+arrives through GitOps rather than Terraform
+([ADR 0006](../../docs/adr/0006-gitops-argo-cd-app-of-apps.md)); this stack does
+not grow.
+
+The root Application points at [`gitops/root/`](../../gitops/README.md), which
+declares a child per layer. Adding an add-on or an application after this is a
+change under `gitops/`, with no Terraform and no cloud credentials involved.
 
 State lives in the same bucket as the other stacks, under its own key, so this
 can be rebuilt without touching the substrate.
@@ -91,6 +96,35 @@ for, so `values/argocd.yaml` trims:
 
 The application-controller is the component to watch: its memory tracks the
 number of managed objects rather than traffic, so it grows as the platform does.
+
+## Repository access
+
+Argo CD has to read this repository. While it is private that means a
+credential; a **read-only deploy key** is the narrowest one — scoped to this
+repository, no account-wide rights.
+
+```bash
+ssh-keygen -t ed25519 -C "argocd@heptapedal" -f /tmp/argocd-deploy-key -N ""
+# add /tmp/argocd-deploy-key.pub to the repository as a deploy key (read-only)
+export TF_VAR_repo_ssh_private_key="$(cat /tmp/argocd-deploy-key)"
+export TF_VAR_repo_url="git@github.com:shogotsuneto/heptapedal-infra.git"
+tofu apply
+shred -u /tmp/argocd-deploy-key /tmp/argocd-deploy-key.pub
+```
+
+`repo_url` must be the SSH form when a key is supplied — a deploy key
+authenticates SSH, and the HTTPS URL would make Argo CD ignore the credential
+and simply fail to read the repository. The stack refuses to apply otherwise.
+
+This credential cannot be a Sealed Secret: it is what lets Argo CD read the
+repository those sealed manifests live in, so it has to exist before GitOps can
+start. Bootstrap material, like the Spaces keys.
+
+**Making the repository public deletes all of this.** Argo CD reads a public
+repository with no credential at all; leave `repo_ssh_private_key` empty and the
+Secret is not created. That is the simplification
+[ADR 0012](../../docs/adr/0012-treat-the-repository-as-publishable.md) was
+written to make available and #28 gates.
 
 ## Upgrading
 
