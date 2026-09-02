@@ -97,34 +97,50 @@ for, so `values/argocd.yaml` trims:
 The application-controller is the component to watch: its memory tracks the
 number of managed objects rather than traffic, so it grows as the platform does.
 
-## Repository access
+## Register the repository — the handoff step
 
-Argo CD has to read this repository. While it is private that means a
-credential; a **read-only deploy key** is the narrowest one — scoped to this
-repository, no account-wide rights.
+Argo CD has to read this repository, and while it is private that needs a
+credential. **This one step is manual, and deliberately so.**
+
+It is where push-based provisioning hands over to pull-based GitOps, and it is
+the same shape as the step that opened the chain: `terraform/bootstrap` creates
+the state bucket by hand, using a credential kept out of CI; this closes it by
+granting Argo CD the read access that lets everything afterwards flow from git.
+A credential needed *once* patterns with the full-access Spaces key, not with
+the bucket-scoped one CI uses on every run.
+
+Keeping it out of Terraform also keeps the copies down: the private half of the
+key lives in the cluster and nowhere else — not in state, not in an Actions
+secret.
 
 ```bash
 ssh-keygen -t ed25519 -C "argocd@heptapedal" -f /tmp/argocd-deploy-key -N ""
-# add /tmp/argocd-deploy-key.pub to the repository as a deploy key (read-only)
-export TF_VAR_repo_ssh_private_key="$(cat /tmp/argocd-deploy-key)"
-export TF_VAR_repo_url="git@github.com:shogotsuneto/heptapedal-infra.git"
-tofu apply
-shred -u /tmp/argocd-deploy-key /tmp/argocd-deploy-key.pub
+
+# GitHub: repository -> Settings -> Deploy keys -> Add
+#   paste /tmp/argocd-deploy-key.pub, leave "Allow write access" unchecked
+
+kubectl -n argocd port-forward svc/argocd-server 8080:80   # in another shell
+argocd login localhost:8080 --username admin --insecure
+argocd repo add git@github.com:shogotsuneto/heptapedal-infra.git \
+  --ssh-private-key-path /tmp/argocd-deploy-key
+
+rm /tmp/argocd-deploy-key /tmp/argocd-deploy-key.pub
 ```
 
-`repo_url` must be the SSH form when a key is supplied — a deploy key
-authenticates SSH, and the HTTPS URL would make Argo CD ignore the credential
-and simply fail to read the repository. The stack refuses to apply otherwise.
+Verify with `argocd repo list` — the repository should show `Successful`.
 
-This credential cannot be a Sealed Secret: it is what lets Argo CD read the
-repository those sealed manifests live in, so it has to exist before GitOps can
-start. Bootstrap material, like the Spaces keys.
+Until this is done the root Application fails with a repository access error,
+which names its own cause well enough.
 
-**Making the repository public deletes all of this.** Argo CD reads a public
-repository with no credential at all; leave `repo_ssh_private_key` empty and the
-Secret is not created. That is the simplification
-[ADR 0012](../../docs/adr/0012-treat-the-repository-as-publishable.md) was
-written to make available and #28 gates.
+**Rotation** is manual too: add a new deploy key, `argocd repo add` again, remove
+the old key from GitHub. Nothing detects a stale one, so it is a deliberate act
+rather than a scheduled one. The key is reissuable, so losing it costs a
+re-register and nothing else — no copy needs keeping
+([ADR 0007](../../docs/adr/0007-secrets-sealed-secrets.md)).
+
+**Publishing the repository removes all of this.** Argo CD reads a public
+repository with no credential; the `repoURL`s revert to HTTPS and the deploy key
+is deleted. Tracked on #28.
 
 ## Upgrading
 

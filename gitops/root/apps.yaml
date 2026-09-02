@@ -16,7 +16,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/shogotsuneto/heptapedal-infra.git
+    repoURL: git@github.com:shogotsuneto/heptapedal-infra.git
     targetRevision: main
     path: gitops/apps
     directory:
