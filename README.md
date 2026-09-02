@@ -85,7 +85,14 @@ changes.
 
 `check` runs `fmt` and `init -backend=false && validate` over **every** stack,
 including `bootstrap`, which CI never applies. It needs no secrets, so it is
-also the part that is safe on a pull request from a fork. The `plan` job takes its environment
+also the part that is safe on a pull request from a fork.
+
+Apply is a single job with one **step per stack, in dependency order** — not a
+matrix. The stacks are a chain rather than a set: `argocd` reads the cluster
+`platform` creates. A matrix asserts independence, does not guarantee ordering,
+and with `fail-fast` disabled would apply `argocd` against a cluster whose own
+apply had just failed. Steps run in file order and stop at the first failure. A
+new stack is a new step, placed by what it depends on. The `plan` job takes its environment
 with `deployment: false`, so it gets the secrets without recording a deployment
 — planning is not deploying, and the environment history stays a list of things
 that actually changed. `plan` runs with `-lock=false` so the
