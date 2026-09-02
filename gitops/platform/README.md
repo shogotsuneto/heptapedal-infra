@@ -1,16 +1,26 @@
 # platform
 
-Add-ons every cluster gets. Empty until Phase 3 fills it:
+Add-ons every cluster gets, each an Argo CD `Application` ordered by
+`argocd.argoproj.io/sync-wave`.
 
-| # | Add-on |
-|---|---|
-| 11 | cert-manager, and a DNS-01 `ClusterIssuer` for the wildcard certificate |
-| 12 | Sealed Secrets |
-| 13 | Envoy Gateway, and the shared `Gateway` |
-| 15 | Grafana Alloy |
+| Wave | Contents | Status |
+|---|---|---|
+| 0 | Sealed Secrets controller | in |
+| 1 | every `SealedSecret` this bundle needs | with each add-on |
+| 2 | cert-manager and its DNS-01 `ClusterIssuer`; Grafana Alloy | #11, #15 |
+| 3 | Envoy Gateway and the shared `Gateway` | #13 |
 
-Order them with `argocd.argoproj.io/sync-wave` annotations — CRDs before what
-uses them, cert-manager before the Gateway that references its certificate.
+The waves follow real dependencies, not tidiness:
 
-An empty directory is a valid source: Argo CD reports the Application Synced
-with nothing to do, which is what lets wave 1 proceed today.
+- **Controller first**, because a `SealedSecret` cannot be decrypted before it
+  runs, and its CRD has to exist to be applied at all.
+- **Sealed values in a wave of their own**, ahead of everything that consumes
+  them. Sharing a wave with a consumer would race — and on a rebuild, where
+  every seal is stale, this is the wave that stops the bundle rather than
+  letting broken components deploy. See
+  [the rebuild note](../README.md#what-a-rebuilt-cluster-does).
+- **Envoy Gateway last**, because the shared `Gateway` references a certificate
+  cert-manager has to have issued.
+
+Argo CD assesses each Application's health, so a wave waits for the previous one
+to be Healthy rather than merely created.
