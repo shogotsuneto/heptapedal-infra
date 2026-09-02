@@ -17,6 +17,9 @@ metadata:
 spec:
   acme:
     server: https://acme-staging-v02.api.letsencrypt.org/directory
+    # Registered with Let's Encrypt as the account contact; they use it for
+    # expiry warnings when a certificate is about to lapse unrenewed.
+    email: shogotsuneto@gmail.com
     privateKeySecretRef:
       name: letsencrypt-staging-account
     solvers:
@@ -38,6 +41,7 @@ metadata:
 spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
+    email: shogotsuneto@gmail.com
     privateKeySecretRef:
       name: letsencrypt-production-account
     solvers:
