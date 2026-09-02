@@ -1,0 +1,14 @@
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  name: digitalocean-dns
+  namespace: cert-manager
+spec:
+  encryptedData:
+    access-token: AgC/02QzS0YqS2ScTSBbbDcstJEBl22q8eeUnCm+mwebzEgxWOgO5xmg6jcwCy3666waYj1iEz4FL9kFI36SsXJkAma8A04h/gqSOLEvX7Ks9YYSLiTPyTx0nC6+3+D+7kUU7TTkdpogUBc6gBFieLHgM0RofSSs2GTilQKUi7DWEs/7sX+AwKK5bd+3NM+BzhW5U0xc6AqCKufBRDJl8JS2jtQI6+FXzvesOOwNHRsqmfvpJRQ+75NWyNlvHJzhFG8qe78HIq4EsGn1QME6jfkr78Pf4urgMW6jG8Dzcj3MP8YEI9GooO6MiyfIUkpwajhRSd8A8JYwhmEH7dZWxMmJhURpNWsb/1JEB+LiPiWcL1sh319voQz0ONyNKNjuOh7SDKviH857yzNgK8qXJg2bQUJj4LkoyQzVo96RvS1RQrw1zTB9ajqzQ21nSaNs4z3K6pjDp67UK1e9han9mPjbRckkAWfmK97WUgxrVefNqqxFY7B74Gdsz1gs+pwMCuM6JrecH2cLhRR/GehjlSLknOJRIRkTXYOW67pBgqvRltI4Pxn8pOnUcBjbhwqdv5e5G6FXKn+q6rqsJWbbG+Xnc3nEyqqKa3JrrIng3JEeV25XAaDM19FDi32q9aWklZ4yyOkDorlGP6c6YOsufG0r9TZw4AEbrnCk1h1r9KuEwHG7znF03kMu5ZNEVIyzPUjLwqsjxJdBR54u9qDqUcpofxP6hvLCIuOYhhYZVbPnPnkszgH0Ijc8RhWo7HWkEZZcUZdnBfX7yZ8MKdDI458t4eFZkamGYw==
+  template:
+    metadata:
+      name: digitalocean-dns
+      namespace: cert-manager
