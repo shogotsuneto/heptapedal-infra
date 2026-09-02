@@ -1,0 +1,133 @@
+# The shared Gateway: one entry point, and each application attaches its own
+# HTTPRoute from its own namespace. That delegation is what Ingress never had
+# and the reason ADR 0005 chose Gateway API over another Ingress controller.
+#
+# Wave 5, after Envoy Gateway's CRDs and controller.
+
+# Data-plane configuration, referenced by the GatewayClass below.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: heptapedal
+  namespace: gateway
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        annotations:
+          # Names the load balancer in the DigitalOcean console, so the 12
+          # USD/month line on the bill is identifiable.
+          service.beta.kubernetes.io/do-loadbalancer-name: heptapedal
+
+          # #14. MCP Streamable HTTP holds long-lived connections, and the
+          # default idle timeout is 60 seconds.
+          #
+          # Whether this reaches them is NOT established. Envoy terminates TLS,
+          # so the load balancer's protocol is `tcp` — its default — and
+          # DigitalOcean documents this annotation only in an HTTP context. It
+          # is set because it is free and may apply; #20's end-to-end test,
+          # holding a session open past 60 seconds, is what will actually
+          # answer it. If it does not, the lever is keepalives from the
+          # application side rather than a larger number here.
+          service.beta.kubernetes.io/do-loadbalancer-http-idle-timeout-seconds: "600"
+
+      envoyDeployment:
+        # Two, so a node drain during the monthly upgrade window does not take
+        # the only ingress path with it. The control plane is deliberately
+        # non-HA (ADR 0004); that is a different failure domain from the data
+        # plane, which carries live traffic.
+        replicas: 2
+        container:
+          resources:
+            requests:
+              cpu: 50m
+              memory: 96Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: heptapedal
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: heptapedal
+    namespace: gateway
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: heptapedal
+  namespace: gateway
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  gatewayClassName: heptapedal
+  listeners:
+    # No hostname: it matches everything, and everything it matches is
+    # redirected by the HTTPRoute below.
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: All
+
+    # Two HTTPS listeners rather than one without a hostname, so the Gateway
+    # serves this certificate for exactly the names it covers — the apex and one
+    # label of subdomain — and not for arbitrary SNI.
+    - name: https-apex
+      protocol: HTTPS
+      port: 443
+      hostname: heptapedal.com
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: heptapedal-wildcard-tls
+      allowedRoutes:
+        namespaces:
+          from: All
+
+    - name: https-wildcard
+      protocol: HTTPS
+      port: 443
+      hostname: "*.heptapedal.com"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: heptapedal-wildcard-tls
+      allowedRoutes:
+        namespaces:
+          from: All
+---
+# Gateway API has no listener-level redirect, so plain HTTP is answered by a
+# route that does nothing but send the client to HTTPS.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: https-redirect
+  namespace: gateway
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  parentRefs:
+    - name: heptapedal
+      sectionName: http
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 301

@@ -1,0 +1,49 @@
+# Envoy Gateway — the Gateway API implementation replacing the retired
+# ingress-nginx ([ADR 0005](../../docs/adr/0005-gateway-api-envoy-gateway.md)).
+#
+# Wave 4: the Gateway it will serve references a certificate cert-manager has to
+# have issued (wave 3).
+#
+# The chart is an OCI artifact. Argo CD takes the registry path *without* the
+# `oci://` scheme, unlike helm — a difference that fails at sync, not at review.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: envoy-gateway
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: docker.io/envoyproxy
+    chart: gateway-helm
+    targetRevision: v1.9.1
+    helm:
+      valuesObject:
+        # Installs the Gateway API CRDs as well as Envoy Gateway's own. DOKS
+        # does not manage Gateway API CRDs, so nothing else owns them.
+        crds:
+          enabled: true
+
+        deployment:
+          envoyGateway:
+            # Upstream asks for 256Mi and a 1Gi ceiling. This control plane
+            # serves one Gateway, so the request comes down; the ceiling stays
+            # generous because xDS memory tracks configuration size, and being
+            # OOMKilled would take the data plane's config source with it.
+            resources:
+              requests:
+                cpu: 50m
+                memory: 128Mi
+              limits:
+                memory: 512Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: envoy-gateway-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

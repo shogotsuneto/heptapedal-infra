@@ -9,8 +9,9 @@ Add-ons every cluster gets, each an Argo CD `Application` ordered by
 | 0 | Sealed Secrets controller | in |
 | 1 | every `SealedSecret` this bundle needs | with each add-on |
 | 2 | cert-manager; Grafana Alloy | in, #15 |
-| 3 | `ClusterIssuer`s, the `gateway` namespace, the wildcard `Certificate` | in |
-| 4 | Envoy Gateway and the shared `Gateway` | #13 |
+| 3 | `ClusterIssuer`s and the wildcard `Certificate` | in |
+| 4 | Envoy Gateway | in |
+| 5 | `GatewayClass`, `EnvoyProxy`, the shared `Gateway`, the HTTPS redirect | in |
 
 The waves follow real dependencies, not tidiness:
 
@@ -31,11 +32,46 @@ The waves follow real dependencies, not tidiness:
 - **Issuers after cert-manager**, because their CRDs arrive with it. Those
   resources carry `SkipDryRunOnMissingResource=true` so Argo CD does not fail
   validating a kind it has not seen yet on a cluster built from nothing.
-- **Envoy Gateway last**, because the shared `Gateway` references a certificate
-  cert-manager has to have issued.
+- **Envoy Gateway after cert-manager**, because the `Gateway` it serves
+  references a certificate that has to have been issued; and the `Gateway`
+  itself after Envoy Gateway, whose CRDs define it.
 
 Argo CD assesses each Application's health, so a wave waits for the previous one
 to be Healthy rather than merely created.
+
+## The Gateway
+
+One entry point; each application attaches its own `HTTPRoute` from its own
+namespace ([ADR 0005](../../docs/adr/0005-gateway-api-envoy-gateway.md)).
+`allowedRoutes.namespaces.from: All` is what permits that, and it is the
+delegation Ingress never had.
+
+**Two HTTPS listeners**, for the apex and for `*.heptapedal.com`, rather than one
+with no hostname. A hostname-less listener would serve this certificate for
+arbitrary SNI; these serve it for exactly the names it covers.
+
+**HTTP is answered only by a redirect.** Gateway API has no listener-level
+redirect, so plain HTTP goes to an `HTTPRoute` whose only rule is a 301 to
+HTTPS.
+
+**The load balancer's idle timeout is set but unproven.** MCP Streamable HTTP
+holds long-lived connections and DigitalOcean's default is 60 seconds, so the
+`EnvoyProxy` sets
+`service.beta.kubernetes.io/do-loadbalancer-http-idle-timeout-seconds: "600"`.
+Whether it reaches those connections is **not** established: Envoy terminates
+TLS, so the load balancer runs at its default `tcp` protocol, and DigitalOcean
+documents this annotation only in an HTTP context. It costs nothing to set and
+may apply. #20's end-to-end test — holding a session open past 60 seconds — is
+what answers it. If it does not apply, the lever is application-side keepalives,
+not a larger number here.
+
+**Two Envoy replicas**, so a node drain in the monthly upgrade window does not
+take the only ingress path with it. The control plane is deliberately non-HA
+([ADR 0004](../../docs/adr/0004-kubernetes-on-doks.md)); the data plane carries
+live traffic and is a different failure domain.
+
+Nothing resolves here yet — the apex `A` record pointing at the load balancer is
+#20.
 
 ## cert-manager
 
