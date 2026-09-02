@@ -1,0 +1,37 @@
+# The namespace the shared Gateway will live in (#13), and the wildcard
+# certificate it serves.
+#
+# The certificate is issued here rather than alongside the Gateway because a
+# Gateway's certificateRefs resolve in its own namespace: the Secret has to
+# exist next to it. Issuing it in wave 3 also means #13 finds it already there
+# rather than waiting on ACME while the Gateway reports unhealthy.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gateway
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: heptapedal-wildcard
+  namespace: gateway
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  secretName: heptapedal-wildcard-tls
+
+  # Staging until issuance is proven. Let's Encrypt's production limits count
+  # failures, so debugging against it is how a week's quota disappears. Flipping
+  # to letsencrypt-production is a one-line change and the last step of #11 —
+  # see ../README.md.
+  issuerRef:
+    name: letsencrypt-staging
+    kind: ClusterIssuer
+
+  commonName: heptapedal.com
+  dnsNames:
+    - heptapedal.com
+    - "*.heptapedal.com"
