@@ -61,6 +61,26 @@ Commit that file. The name and namespace are part of what is sealed, so
 `digitalocean-dns` in `cert-manager` has to match what the `ClusterIssuer`s
 reference.
 
+**Why `cert-manager` and not the issuer's namespace** — a `ClusterIssuer` has no
+namespace, so cert-manager reads solver credentials from its *cluster resource
+namespace*. Two values are in play and they disagree: the binary defaults
+`--cluster-resource-namespace` to `kube-system`, while the chart passes
+`--cluster-resource-namespace=$(POD_NAMESPACE)`, which resolves to wherever
+cert-manager is installed. Reading only the source would put this Secret in the
+wrong place. If issuance fails with `error getting digitalocean token`, this is
+the thing to check.
+
+**DigitalOcean is a built-in solver**, not a webhook — `digitalocean` is a field
+on `ACMEChallengeSolverDNS01` alongside Route53, Cloudflare and the rest, with
+its implementation shipped in cert-manager. Nothing extra to deploy. A provider
+outside that list, such as Namecheap, would have needed the `webhook` solver and
+a webhook deployment of its own — a quiet argument for having moved DNS to
+DigitalOcean in [ADR 0009](../../docs/adr/0009-dns-and-tls.md).
+
+The scopes above come from what the solver actually calls: `Domains.CreateRecord`
+to place the `_acme-challenge` TXT record, a list to find it again, and
+`Domains.DeleteRecord` to remove it.
+
 ### Staging first, then production
 
 The `Certificate` points at `letsencrypt-staging`. Production counts **failures**
