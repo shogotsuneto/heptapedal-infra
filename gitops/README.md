@@ -73,19 +73,53 @@ own message. Because the sealed values sit in their own sync wave, ahead of
 everything that consumes them, the wave never completes and **nothing after it
 deploys at all**.
 
-> This needs no configuration, contrary to a common assumption. Argo CD's health
-> checks come from two places: `resource.customizations` in `argocd-cm`, and
-> scripts bundled into the binary from its `resource_customizations/` directory
-> — `//go:embed all:*`. `GetHealthScript` consults the ConfigMap first and falls
-> back to the bundled script "if not found in the ResourceOverrides at all", so
-> the ConfigMap is for *overriding* a bundled check, not for enabling one.
-> `bitnami.com/SealedSecret/health.lua` is bundled.
->
-> Checkable on the cluster rather than in the source: `argocd-cm` here defines no
-> `resource.customizations` at all, and a `SealedSecret` still reports a health
-> status in `argocd app get platform`. Temporarily corrupting one flips it to
-> Degraded with the controller's message, which is the whole mechanism in one
-> observation.
+#### Where that behaviour comes from
+
+It needs no configuration, contrary to a common assumption — but the chain has
+two halves, and reading only the Argo CD half does not explain it. Links pinned
+to the versions actually deployed.
+
+**1. The controller writes the condition.** On a failed unseal it sets `Synced`
+to `False` with the error as the message:
+
+```go
+} else {
+    status = corev1.ConditionFalse
+    cond.Message = unsealError.Error()
+}
+```
+
+[`updateSealedSecretStatus`, sealed-secrets v0.39.1](https://github.com/bitnami-labs/sealed-secrets/blob/v0.39.1/pkg/controller/controller.go)
+· [`Synced` condition type](https://github.com/bitnami-labs/sealed-secrets/blob/v0.39.1/pkg/apis/sealedsecrets/v1alpha1/types.go)
+
+That is gated on `--update-status`, which
+[defaults to true](https://github.com/bitnami-labs/sealed-secrets/blob/v0.39.1/cmd/controller/main.go)
+("stable; enabled by default since v0.17.0"). The chart's `updateStatus` is set
+explicitly in `platform/sealed-secrets.yaml` rather than left to that default,
+because turning it off would silently cost the Degraded signal.
+
+**2. Argo CD reads it**, through a check bundled in its binary rather than
+configured:
+
+[`bitnami.com/SealedSecret/health.lua`, Argo CD v3.5.2](https://github.com/argoproj/argo-cd/blob/v3.5.2/resource_customizations/bitnami.com/SealedSecret/health.lua)
+· [its tests](https://github.com/argoproj/argo-cd/blob/v3.5.2/resource_customizations/bitnami.com/SealedSecret/health_test.yaml)
+— which assert the Degraded case with `no key could decrypt secret`, so this
+behaviour is fixed upstream rather than incidental.
+
+Bundled, not configured:
+[`//go:embed all:*`](https://github.com/argoproj/argo-cd/blob/v3.5.2/resource_customizations/embed.go)
+and [`GetHealthScript`](https://github.com/argoproj/argo-cd/blob/v3.5.2/util/lua/lua.go),
+which consults `argocd-cm` first and falls back to the bundled script "if not
+found in the ResourceOverrides at all". The ConfigMap *overrides* a bundled
+check; it does not enable one.
+
+Note the embedding means there is no file to find on the pod — only source, or
+behaviour.
+
+**Checking it on the cluster instead:** `argocd-cm` here defines no
+`resource.customizations` at all, and a `SealedSecret` still reports health in
+`argocd app get platform`. Corrupting one temporarily flips it to Degraded with
+the controller's message — both halves of the chain in one observation.
 
 So a rebuild stops exactly where a human is needed, naming each secret that
 needs attention — rather than bringing up a platform whose pieces quietly do not
