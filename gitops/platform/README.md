@@ -42,16 +42,22 @@ to be Healthy rather than merely created.
 ### Its DigitalOcean token
 
 DNS-01 needs a token that can write records. **Not the Terraform token** — this
-one lives in the cluster, so it gets only what solving a challenge requires:
+one lives in the cluster, and gets only what solving a challenge requires.
 
-```
-domain:read  domain:create  domain:delete
-```
+Everything under `domain`, and nothing else. The **minimum within that is not
+established**: the token in use also carries `domain:update`, so a successful
+issuance does not prove `read`/`create`/`delete` alone would have sufficed.
 
-cert-manager adds a `_acme-challenge` TXT record and removes it afterwards. If a
-challenge fails with a 403, add `domain:update` — whether record writes count as
-updating the parent domain is not something DigitalOcean's scope documentation
-settles.
+What the solver actually calls is `Domains.CreateRecord`, a list, and
+`Domains.DeleteRecord`. DigitalOcean documents `create` as covering "additive
+actions" within a resource and `delete` as covering actions that remove
+information from it, which points at `read`/`create`/`delete` being enough — but
+that is reading the documentation's analogous examples, not a test.
+
+To settle it cheaply, without spending production quota: issue a throwaway
+`Certificate` for some other subdomain against `letsencrypt-staging`, with a
+token that lacks `update`. Staging's limits are generous, and the answer is
+immediate. Until then this is inference.
 
 Seal it. Note the order: annotate **after** `kubeseal`, or the sync wave lands
 in `spec.template` and applies to the Secret rather than to the `SealedSecret`
@@ -110,6 +116,17 @@ then change `issuerRef.name` to `letsencrypt-production` in
 `gateway-certificate.yaml` and commit. cert-manager reissues; the Secret keeps
 its name, so nothing downstream changes.
 
-A staging certificate is signed by an untrusted root, so it is fine for proving
-the pipeline and useless for serving traffic. Flip before #13 puts a Gateway in
-front of it.
+**Done** — the certificate is issued by production. The staging issuer stays
+declared, because it is where to point anything whose issuance is not yet
+proven. Reach for it whenever the DNS names, the solver or the token change.
+
+Confirm which one signed the live certificate:
+
+```bash
+kubectl -n gateway get secret heptapedal-wildcard-tls \
+  -o jsonpath='{.data.tls\.crt}' | base64 -d \
+  | openssl x509 -noout -issuer -dates
+```
+
+`(STAGING)` anywhere in the issuer means it is still the untrusted root, which
+proves the pipeline and cannot serve traffic.
