@@ -5,6 +5,7 @@ Add-ons every cluster gets, each an Argo CD `Application` ordered by
 
 | Wave | Contents | Status |
 |---|---|---|
+| -1 | namespaces the bundle installs into | in |
 | 0 | Sealed Secrets controller | in |
 | 1 | every `SealedSecret` this bundle needs | with each add-on |
 | 2 | cert-manager; Grafana Alloy | in, #15 |
@@ -13,6 +14,13 @@ Add-ons every cluster gets, each an Argo CD `Application` ordered by
 
 The waves follow real dependencies, not tidiness:
 
+- **Namespaces before anything that goes in one.** Declared rather than left to
+  each Application's `CreateNamespace=true`, which creates the namespace during
+  *that* Application's sync — too late for a resource scheduled earlier. The
+  cert-manager token is a wave-1 `SealedSecret` in `cert-manager`, and the
+  Application that would have created that namespace runs at wave 2: wave 1
+  fails, wave 2 never starts, and the bundle deadlocks on `namespaces
+  "cert-manager" not found`. A namespace is a dependency like any other.
 - **Controller first**, because a `SealedSecret` cannot be decrypted before it
   runs, and its CRD has to exist to be applied at all.
 - **Sealed values in a wave of their own**, ahead of everything that consumes
