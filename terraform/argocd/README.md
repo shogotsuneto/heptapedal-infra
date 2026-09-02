@@ -52,6 +52,11 @@ Plain HTTP, because `server.insecure` is set: the only path to this service is
 already inside the cluster, and when it is eventually published the Gateway will
 terminate TLS ([ADR 0005](../../docs/adr/0005-gateway-api-envoy-gateway.md)).
 
+> The CLI needs **`--plaintext`**, not `--insecure`. `--insecure` skips
+> certificate verification but still speaks TLS, so against a plaintext server
+> the handshake is reset — which kills the port-forward with
+> `lost connection to pod` rather than reporting a protocol mismatch.
+
 The initial admin password:
 
 ```bash
@@ -63,7 +68,7 @@ kubectl -n argocd get secret argocd-initial-admin-secret \
 cluster in plaintext until removed:
 
 ```bash
-argocd login localhost:8080 --username admin --insecure
+argocd login localhost:8080 --plaintext --username admin
 argocd account update-password
 kubectl -n argocd delete secret argocd-initial-admin-secret
 ```
@@ -120,7 +125,7 @@ ssh-keygen -t ed25519 -C "argocd@heptapedal" -f /tmp/argocd-deploy-key -N ""
 #   paste /tmp/argocd-deploy-key.pub, leave "Allow write access" unchecked
 
 kubectl -n argocd port-forward svc/argocd-server 8080:80   # in another shell
-argocd login localhost:8080 --username admin --insecure
+argocd login localhost:8080 --plaintext --username admin
 argocd repo add git@github.com:shogotsuneto/heptapedal-infra.git \
   --ssh-private-key-path /tmp/argocd-deploy-key
 
