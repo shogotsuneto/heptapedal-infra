@@ -17,12 +17,13 @@ metadata:
 spec:
   secretName: heptapedal-wildcard-tls
 
-  # Staging until issuance is proven. Let's Encrypt's production limits count
-  # failures, so debugging against it is how a week's quota disappears. Flipping
-  # to letsencrypt-production is a one-line change and the last step of #11 —
-  # see ../README.md.
+  # Production, now that staging has issued this exact certificate — same DNS
+  # names, same solver, same token. The staging issuer stays declared: it is
+  # where to point anything whose issuance is not yet proven, since Let's
+  # Encrypt counts failures against a limit of five duplicate certificates a
+  # week.
   issuerRef:
-    name: letsencrypt-staging
+    name: letsencrypt-production
     kind: ClusterIssuer
 
   commonName: heptapedal.com

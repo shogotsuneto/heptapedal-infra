@@ -110,6 +110,17 @@ then change `issuerRef.name` to `letsencrypt-production` in
 `gateway-certificate.yaml` and commit. cert-manager reissues; the Secret keeps
 its name, so nothing downstream changes.
 
-A staging certificate is signed by an untrusted root, so it is fine for proving
-the pipeline and useless for serving traffic. Flip before #13 puts a Gateway in
-front of it.
+**Done** — the certificate is issued by production. The staging issuer stays
+declared, because it is where to point anything whose issuance is not yet
+proven. Reach for it whenever the DNS names, the solver or the token change.
+
+Confirm which one signed the live certificate:
+
+```bash
+kubectl -n gateway get secret heptapedal-wildcard-tls \
+  -o jsonpath='{.data.tls\.crt}' | base64 -d \
+  | openssl x509 -noout -issuer -dates
+```
+
+`(STAGING)` anywhere in the issuer means it is still the untrusted root, which
+proves the pipeline and cannot serve traffic.
