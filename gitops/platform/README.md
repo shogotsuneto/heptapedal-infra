@@ -1,16 +1,22 @@
 # platform
 
-Add-ons every cluster gets. Empty until Phase 3 fills it:
+Add-ons every cluster gets, each an Argo CD `Application` ordered by
+`argocd.argoproj.io/sync-wave`.
 
-| # | Add-on |
-|---|---|
-| 11 | cert-manager, and a DNS-01 `ClusterIssuer` for the wildcard certificate |
-| 12 | Sealed Secrets |
-| 13 | Envoy Gateway, and the shared `Gateway` |
-| 15 | Grafana Alloy |
+| Wave | Add-on | Status |
+|---|---|---|
+| 0 | Sealed Secrets | in |
+| 1 | cert-manager, and a DNS-01 `ClusterIssuer` | #11 |
+| 1 | Grafana Alloy | #15 |
+| 2 | Envoy Gateway, and the shared `Gateway` | #13 |
 
-Order them with `argocd.argoproj.io/sync-wave` annotations — CRDs before what
-uses them, cert-manager before the Gateway that references its certificate.
+The waves follow real dependencies, not tidiness:
 
-An empty directory is a valid source: Argo CD reports the Application Synced
-with nothing to do, which is what lets wave 1 proceed today.
+- **Sealed Secrets first**, because cert-manager's DigitalOcean token, Alloy's
+  Grafana Cloud token and the GHCR registry credential (#10) all arrive as
+  `SealedSecret`s, which are undecryptable until its controller runs.
+- **Envoy Gateway last**, because the shared `Gateway` references a certificate
+  cert-manager has to have issued.
+
+Argo CD assesses each Application's health, so a wave waits for the previous one
+to be Healthy rather than merely created.

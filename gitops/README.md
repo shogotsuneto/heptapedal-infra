@@ -26,6 +26,32 @@ platform Application reports Healthy — not merely until it has been created.
 Ordering *within* the platform bundle is the bundle's own business, expressed
 with waves on its members: CRDs, then cert-manager, then Envoy Gateway.
 
+## Secrets
+
+Encrypted `SealedSecret` manifests are committed here, alongside whatever
+consumes them ([ADR 0007](../docs/adr/0007-secrets-sealed-secrets.md)). The
+controller runs in `kube-system` as `sealed-secrets-controller` — kubeseal's
+defaults — so sealing needs no flags:
+
+```bash
+kubectl create secret generic NAME -n NAMESPACE \
+  --dry-run=client -o yaml --from-literal=key=value \
+  | kubeseal --format yaml > gitops/.../NAME.yaml
+```
+
+Default scoping binds each ciphertext to one namespace **and** name, so the
+`-n` and `NAME` above are part of what is encrypted: renaming either means
+resealing.
+
+Two rules carry over from the ADR:
+
+- **The ciphertext is never a value's only copy.** Every sealed value is
+  retrievable or reissuable from the service that owns it; anything without such
+  a home gets one *before* it is sealed.
+- **The sealing keys are not backed up.** Losing them costs a re-seal, not data
+  — which is only true while the rule above holds. A rebuilt cluster has new
+  keys, so every `SealedSecret` here must be resealed then (#24).
+
 ## Adding to it
 
 A platform add-on is a file in `platform/`. An application is a directory in
