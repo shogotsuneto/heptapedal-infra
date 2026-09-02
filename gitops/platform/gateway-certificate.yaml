@@ -1,17 +1,11 @@
-# The namespace the shared Gateway will live in (#13), and the wildcard
-# certificate it serves.
+# The wildcard certificate the shared Gateway (#13) serves.
 #
-# The certificate is issued here rather than alongside the Gateway because a
-# Gateway's certificateRefs resolve in its own namespace: the Secret has to
-# exist next to it. Issuing it in wave 3 also means #13 finds it already there
+# Issued into the `gateway` namespace rather than alongside cert-manager because
+# a Gateway's certificateRefs resolve in its own namespace: the Secret has to
+# exist next to it. Issuing it at wave 3 also means #13 finds it already there
 # rather than waiting on ACME while the Gateway reports unhealthy.
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: gateway
-  annotations:
-    argocd.argoproj.io/sync-wave: "3"
----
+#
+# The namespace itself is declared in namespaces.yaml, at wave -1.
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:

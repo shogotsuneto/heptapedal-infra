@@ -1,0 +1,27 @@
+# Namespaces the bundle puts things into, declared ahead of everything else.
+#
+# Wave -1, and explicit rather than left to each Application's
+# `CreateNamespace=true`. That option creates the namespace as part of *that*
+# Application's sync, which is too late for anything scheduled earlier: the
+# cert-manager token is a wave-1 SealedSecret in `cert-manager`, while the
+# Application that would have created that namespace runs at wave 2. Wave 1
+# fails, so wave 2 never starts, and the bundle deadlocks on
+#
+#   namespaces "cert-manager" not found
+#
+# A namespace is a dependency like any other, so it is declared where its
+# ordering can be seen.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cert-manager
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+---
+# Home of the shared Gateway (#13) and the wildcard certificate issued for it.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gateway
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
