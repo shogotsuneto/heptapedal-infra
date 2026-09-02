@@ -73,6 +73,20 @@ own message. Because the sealed values sit in their own sync wave, ahead of
 everything that consumes them, the wave never completes and **nothing after it
 deploys at all**.
 
+> This needs no configuration, contrary to a common assumption. Argo CD's health
+> checks come from two places: `resource.customizations` in `argocd-cm`, and
+> scripts bundled into the binary from its `resource_customizations/` directory
+> — `//go:embed all:*`. `GetHealthScript` consults the ConfigMap first and falls
+> back to the bundled script "if not found in the ResourceOverrides at all", so
+> the ConfigMap is for *overriding* a bundled check, not for enabling one.
+> `bitnami.com/SealedSecret/health.lua` is bundled.
+>
+> Checkable on the cluster rather than in the source: `argocd-cm` here defines no
+> `resource.customizations` at all, and a `SealedSecret` still reports a health
+> status in `argocd app get platform`. Temporarily corrupting one flips it to
+> Degraded with the controller's message, which is the whole mechanism in one
+> observation.
+
 So a rebuild stops exactly where a human is needed, naming each secret that
 needs attention — rather than bringing up a platform whose pieces quietly do not
 work.
