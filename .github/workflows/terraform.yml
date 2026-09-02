@@ -12,6 +12,11 @@
 #
 # `terraform/bootstrap` is deliberately absent. It needs the full-access Spaces
 # key, which is kept out of CI, and it is applied roughly once by hand.
+#
+# Excluding it also means CI cannot build the platform from nothing; the rebuild
+# runbook (#24) does that by hand. What CI does handle is the ordering between
+# the stacks it owns — argocd reads the cluster platform creates — which the
+# apply job expresses as steps rather than a matrix. See the comment there.
 name: terraform
 
 on:
@@ -49,8 +54,11 @@ jobs:
         run: echo "tofu=$(awk '/^opentofu /{print $2}' .tool-versions)" >> "$GITHUB_OUTPUT"
 
   # Needs no credentials, so it is safe on a pull request from a fork — and it
-  # covers bootstrap, which the plan matrix does not.
-  fmt:
+  # covers every stack, including the two `plan` leaves out: bootstrap, which is
+  # applied by hand, and argocd, whose plan would need cluster administrator
+  # rights. `init -backend=false` skips the state backend, so this
+  # catches syntax and provider-schema errors without touching anything.
+  check:
     needs: version
     runs-on: ubuntu-latest
     steps:
@@ -59,7 +67,17 @@ jobs:
         with:
           tofu_version: ${{ needs.version.outputs.tofu }}
           tofu_wrapper: false
+
       - run: tofu fmt -check -recursive -diff terraform/
+
+      - name: Validate every stack
+        run: |
+          for dir in terraform/*/; do
+            echo "::group::${dir}"
+            tofu -chdir="${dir}" init -backend=false -input=false >/dev/null
+            tofu -chdir="${dir}" validate
+            echo "::endgroup::"
+          done
 
   plan:
     needs: version
@@ -82,10 +100,10 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    strategy:
-      fail-fast: false
-      matrix:
-        stack: [platform] # argocd joins in #8
+    # Only `platform`. Planning `argocd` would need `kubernetes:access_cluster`,
+    # which returns an administrator kubeconfig — and this environment's whole
+    # point is holding credentials that cannot change anything. `argocd` is
+    # validated without credentials in `check`, and planned by its apply run.
     env:
       DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -98,16 +116,16 @@ jobs:
           tofu_wrapper: false
 
       - run: tofu init -input=false
-        working-directory: terraform/${{ matrix.stack }}
+        working-directory: terraform/platform
 
       - run: tofu validate
-        working-directory: terraform/${{ matrix.stack }}
+        working-directory: terraform/platform
 
       # -lock=false is what lets the read-only Spaces key suffice: taking a lock
       # would mean writing a .tflock object. Safe — plan does not write state.
       - name: Plan
         id: plan
-        working-directory: terraform/${{ matrix.stack }}
+        working-directory: terraform/platform
         run: |
           set +e
           tofu plan -input=false -lock=false -no-color -detailed-exitcode > plan.txt 2>&1
@@ -115,10 +133,10 @@ jobs:
           cat plan.txt
 
       - name: Comment
-        working-directory: terraform/${{ matrix.stack }}
+        working-directory: terraform/platform
         env:
           GH_TOKEN: ${{ github.token }}
-          STACK: ${{ matrix.stack }}
+          STACK: platform
           EXITCODE: ${{ steps.plan.outputs.exitcode }}
           PR: ${{ github.event.pull_request.number }}
         run: "$GITHUB_WORKSPACE/.github/scripts/plan-comment.sh"
@@ -137,11 +155,6 @@ jobs:
     # comment. The environment still earns its place by keeping these
     # credentials out of the pull-request job. Reviewer goes on with #28.
     environment: production
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix:
-        stack: [platform]
     env:
       DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -152,7 +165,24 @@ jobs:
         with:
           tofu_version: ${{ needs.version.outputs.tofu }}
           tofu_wrapper: false
-      - run: tofu init -input=false
-        working-directory: terraform/${{ matrix.stack }}
-      - run: tofu apply -input=false -auto-approve -lock-timeout=5m
-        working-directory: terraform/${{ matrix.stack }}
+
+      # Steps, not a matrix. The stacks are a chain, not a set: argocd reads
+      # the cluster platform creates. A matrix says "these are independent" —
+      # it does not guarantee ordering, and with fail-fast disabled it would
+      # apply argocd against a cluster whose own apply had just failed. Steps
+      # run in file order and stop at the first failure, which is the behaviour
+      # the dependency actually needs.
+      #
+      # A new stack is a new step, placed by what it depends on.
+
+      - name: platform
+        working-directory: terraform/platform
+        run: |
+          tofu init -input=false
+          tofu apply -input=false -auto-approve -lock-timeout=5m
+
+      - name: argocd
+        working-directory: terraform/argocd
+        run: |
+          tofu init -input=false
+          tofu apply -input=false -auto-approve -lock-timeout=5m

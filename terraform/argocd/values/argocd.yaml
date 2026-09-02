@@ -1,0 +1,73 @@
+# Argo CD, trimmed for a two-node cluster with roughly 6Gi schedulable
+# (ADR 0004). The chart's defaults assume more room than this platform has.
+
+# No SSO: one operator, and Dex is a whole extra Deployment to run an identity
+# broker for nobody.
+dex:
+  enabled: false
+
+# Alerting goes through Grafana Cloud (ADR 0010), so the notifications
+# controller would duplicate a system that already exists.
+notifications:
+  enabled: false
+
+configs:
+  params:
+    # argocd-server serves plain HTTP. Reachable only through port-forward for
+    # now; when it is exposed it will sit behind the Gateway, which terminates
+    # TLS (ADR 0005). Nothing is downgraded — there is no path to it that is
+    # not already inside the cluster.
+    server.insecure: true
+
+server:
+  # Not exposed. Publishing the UI is a separate decision with its own
+  # authentication question; until then, port-forward.
+  service:
+    type: ClusterIP
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+# The application controller is the memory-hungry component: it holds the
+# cluster's resource cache. Generous limit, modest request, because the cost
+# grows with the number of managed objects rather than with traffic.
+controller:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 768Mi
+
+# Renders manifests, including `helm template` over the OCI charts the
+# application ships (ADR 0011). Rendering spikes, so the limit is well above
+# the request.
+repoServer:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+# Installed unconditionally by chart 10.x — there is no top-level toggle. Left
+# idle: ADR 0006 uses app-of-apps until the application count justifies
+# generators. Sized as the near-idle process it is.
+applicationSet:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+redis:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 192Mi
