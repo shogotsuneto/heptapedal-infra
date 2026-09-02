@@ -47,10 +47,45 @@ Two rules carry over from the ADR:
 
 - **The ciphertext is never a value's only copy.** Every sealed value is
   retrievable or reissuable from the service that owns it; anything without such
-  a home gets one *before* it is sealed.
+  a home gets one *before* it is sealed. The table below is where that home is
+  written down — the files say *what* to reseal, not *where the value comes
+  from*.
 - **The sealing keys are not backed up.** Losing them costs a re-seal, not data
-  — which is only true while the rule above holds. A rebuilt cluster has new
-  keys, so every `SealedSecret` here must be resealed then (#24).
+  — which is only true while the rule above holds.
+
+### Where each value comes from
+
+| Sealed Secret | Namespace / name | Value from |
+|---|---|---|
+| _(none yet)_ | | |
+
+Every `SealedSecret` committed here gets a row. A row without a recoverable
+source is the invariant being broken.
+
+### What a rebuilt cluster does
+
+A new cluster has new sealing keys, so every `SealedSecret` in this repository
+becomes undecryptable at once. That is handled, not merely survived.
+
+Argo CD assesses `SealedSecret` health: the controller sets `Synced=False` when
+it cannot decrypt, which Argo CD reports as **Degraded** with the controller's
+own message. Because the sealed values sit in their own sync wave, ahead of
+everything that consumes them, the wave never completes and **nothing after it
+deploys at all**.
+
+So a rebuild stops exactly where a human is needed, naming each secret that
+needs attention — rather than bringing up a platform whose pieces quietly do not
+work.
+
+**Do not clear the stale `SealedSecret`s before rebuilding.** They are doing two
+jobs: they are the list of what must be resealed, and they are the gate that
+stops a half-working platform from coming up. Removing them removes the gate and
+leaves each consumer to fail in its own way — a missing Secret surfaces as a Pod
+stuck on `CreateContainerConfigError`, or a controller that starts cleanly and
+silently cannot do its work.
+
+Reseal each file in place — same namespace, same name, so the scoping still
+matches — commit, and the stall clears itself.
 
 ## Adding to it
 
