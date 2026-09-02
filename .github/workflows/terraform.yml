@@ -13,10 +13,10 @@
 # `terraform/bootstrap` is deliberately absent. It needs the full-access Spaces
 # key, which is kept out of CI, and it is applied roughly once by hand.
 #
-# The stacks therefore have an ordering dependency CI does not express: argocd
-# needs platform's cluster to exist. That only bites on a from-scratch build,
-# which CI cannot do anyway with bootstrap excluded — the rebuild runbook (#24)
-# applies them by hand in order.
+# Excluding it also means CI cannot build the platform from nothing; the rebuild
+# runbook (#24) does that by hand. What CI does handle is the ordering between
+# the stacks it owns — argocd reads the cluster platform creates — which the
+# apply job expresses as steps rather than a matrix. See the comment there.
 name: terraform
 
 on:
