@@ -1,8 +1,13 @@
 # argocd
 
-Installs Argo CD, and nothing else. From here the root Application (#9) takes
-over and the rest of the platform arrives through GitOps rather than Terraform
-([ADR 0006](../../docs/adr/0006-gitops-argo-cd-app-of-apps.md)).
+Installs Argo CD and **one** Application. From there the rest of the platform
+arrives through GitOps rather than Terraform
+([ADR 0006](../../docs/adr/0006-gitops-argo-cd-app-of-apps.md)); this stack does
+not grow.
+
+The root Application points at [`gitops/root/`](../../gitops/README.md), which
+declares a child per layer. Adding an add-on or an application after this is a
+change under `gitops/`, with no Terraform and no cloud credentials involved.
 
 State lives in the same bucket as the other stacks, under its own key, so this
 can be rebuilt without touching the substrate.
@@ -47,6 +52,28 @@ Plain HTTP, because `server.insecure` is set: the only path to this service is
 already inside the cluster, and when it is eventually published the Gateway will
 terminate TLS ([ADR 0005](../../docs/adr/0005-gateway-api-envoy-gateway.md)).
 
+### The CLI forwards for itself
+
+Do **not** point the CLI at a `kubectl port-forward`. Two things bite:
+
+1. `--insecure` is the wrong flag. It skips certificate verification but still
+   speaks TLS; against a plaintext server the handshake is reset. The flag that
+   disables TLS is `--plaintext`.
+2. Even with `--plaintext`, the CLI's gRPC connection does not survive
+   `kubectl port-forward` here — it drops with `lost connection to pod`. The
+   browser is unaffected, so this looks like a broken cluster rather than a
+   broken tunnel.
+
+Let the CLI manage its own forward instead, and set the flags once:
+
+```bash
+export ARGOCD_OPTS="--port-forward --port-forward-namespace argocd --plaintext"
+argocd login --username admin
+```
+
+`ARGOCD_OPTS` is parsed into the same persistent flags, so every later `argocd`
+command in that shell inherits it — including `argocd repo add` below.
+
 The initial admin password:
 
 ```bash
@@ -58,7 +85,6 @@ kubectl -n argocd get secret argocd-initial-admin-secret \
 cluster in plaintext until removed:
 
 ```bash
-argocd login localhost:8080 --username admin --insecure
 argocd account update-password
 kubectl -n argocd delete secret argocd-initial-admin-secret
 ```
@@ -91,6 +117,49 @@ for, so `values/argocd.yaml` trims:
 
 The application-controller is the component to watch: its memory tracks the
 number of managed objects rather than traffic, so it grows as the platform does.
+
+## Register the repository — the handoff step
+
+Argo CD has to read this repository, and while it is private that needs a
+credential. **This one step is manual, and deliberately so.**
+
+It is where push-based provisioning hands over to pull-based GitOps, and it is
+the same shape as the step that opened the chain: `terraform/bootstrap` creates
+the state bucket by hand, using a credential kept out of CI; this closes it by
+granting Argo CD the read access that lets everything afterwards flow from git.
+A credential needed *once* patterns with the full-access Spaces key, not with
+the bucket-scoped one CI uses on every run.
+
+Keeping it out of Terraform also keeps the copies down: the private half of the
+key lives in the cluster and nowhere else — not in state, not in an Actions
+secret.
+
+```bash
+ssh-keygen -t ed25519 -C "argocd@heptapedal" -f /tmp/argocd-deploy-key -N ""
+
+# GitHub: repository -> Settings -> Deploy keys -> Add
+#   paste /tmp/argocd-deploy-key.pub, leave "Allow write access" unchecked
+
+argocd repo add git@github.com:shogotsuneto/heptapedal-infra.git \
+  --ssh-private-key-path /tmp/argocd-deploy-key
+
+rm /tmp/argocd-deploy-key /tmp/argocd-deploy-key.pub
+```
+
+Verify with `argocd repo list` — the repository should show `Successful`.
+
+Until this is done the root Application fails with a repository access error,
+which names its own cause well enough.
+
+**Rotation** is manual too: add a new deploy key, `argocd repo add` again, remove
+the old key from GitHub. Nothing detects a stale one, so it is a deliberate act
+rather than a scheduled one. The key is reissuable, so losing it costs a
+re-register and nothing else — no copy needs keeping
+([ADR 0007](../../docs/adr/0007-secrets-sealed-secrets.md)).
+
+**Publishing the repository removes all of this.** Argo CD reads a public
+repository with no credential; the `repoURL`s revert to HTTPS and the deploy key
+is deleted. Tracked on #28.
 
 ## Upgrading
 

@@ -1,0 +1,30 @@
+# The platform bundle: the add-ons every cluster gets. Curated by hand and
+# small, which is what app-of-apps is good at (ADR 0006).
+#
+# Wave 0 — the applications in wave 1 need cert-manager to have issued a
+# certificate and Envoy Gateway to be listening before they are worth deploying.
+# Argo CD waits for this Application to report Healthy before starting wave 1.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:shogotsuneto/heptapedal-infra.git
+    targetRevision: main
+    path: gitops/platform
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
