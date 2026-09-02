@@ -1,0 +1,62 @@
+# cert-manager — issues the wildcard certificate the shared Gateway serves
+# ([ADR 0009](../../docs/adr/0009-dns-and-tls.md)).
+#
+# Wave 2: after the SealedSecret carrying its DigitalOcean token (wave 1), which
+# the DNS-01 solver needs and which cannot be decrypted before the Sealed
+# Secrets controller in wave 0 is running.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://charts.jetstack.io
+    chart: cert-manager
+    targetRevision: v1.21.1
+    helm:
+      valuesObject:
+        # Off by default in this chart, and nothing works without them.
+        # `keep: true` is also the default: uninstalling leaves the CRDs, so an
+        # accidental removal of this Application does not delete every
+        # Certificate in the cluster along with it.
+        crds:
+          enabled: true
+          keep: true
+
+        resources:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            memory: 192Mi
+
+        webhook:
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              memory: 96Mi
+
+        cainjector:
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              memory: 192Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

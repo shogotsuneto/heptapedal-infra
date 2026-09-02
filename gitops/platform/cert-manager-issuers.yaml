@@ -1,0 +1,48 @@
+# Let's Encrypt, solving DNS-01 against DigitalOcean.
+#
+# DNS-01 rather than HTTP-01 because ADR 0009 wants a wildcard, which HTTP-01
+# cannot issue — and because it works before anything is publicly reachable,
+# which decouples issuance from the Gateway existing.
+#
+# Wave 3: the CRDs arrive with cert-manager in wave 2. SkipDryRunOnMissingResource
+# keeps Argo CD from failing its pre-sync validation on a kind it has not seen
+# yet on a cluster being built from nothing.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-staging
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  acme:
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-staging-account
+    solvers:
+      - dns01:
+          digitalocean:
+            tokenSecretRef:
+              name: digitalocean-dns
+              key: access-token
+---
+# Rate-limited: 5 duplicate certificates per week, and failures count. Prove
+# issuance against staging first; see ../README.md.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-production
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-production-account
+    solvers:
+      - dns01:
+          digitalocean:
+            tokenSecretRef:
+              name: digitalocean-dns
+              key: access-token
