@@ -77,7 +77,15 @@ containing your stack's endpoints and instance IDs and mints a token for them.
 Activation matters on its own: it is what installs the Kubernetes dashboards,
 which is most of why this chart was chosen over a hand-written Alloy config.
 
-Take from it the two endpoint URLs, the two numeric usernames, and the token.
+**Decline the managed discovery pipeline** the wizard offers. That is Fleet
+Management: Grafana Cloud pushing collector configuration remotely, which Alloy
+polls for and applies. It would be a second source of truth for what
+`alloy.yaml` already decides — living outside git, outside review, and not
+reproduced by a cluster rebuild. The values here do not opt in, and the rendered
+output contains no `remotecfg` block.
+
+Take from the wizard the two endpoint URLs, the two numeric usernames, and the
+token.
 The URLs go into `alloy.yaml` — they are endpoints, not secrets. The rest is
 sealed:
 
