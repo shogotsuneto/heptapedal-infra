@@ -105,13 +105,18 @@ should simply stop existing.
 
 Roughly **675m CPU and 1Gi requested** in total.
 
-The repo-server's CPU request is the one that matters. It renders every
-manifest, and charts carrying megabytes of CRDs are routine. At the 50m it was
-first given, renders starved under contention, health checks began taking
-seconds, the liveness probe failed, and the container was killed — repeatedly,
-each time exiting cleanly, so it showed as `Completed` with a restart count
-rather than as a crash. Syncs failed around it in ways that named neither CPU
-nor this container. The chart's defaults assume a
+**The repo-server's probe timeouts are the fix that mattered.** The chart gives
+both probes `timeoutSeconds: 1`, and the liveness probe calls
+`/healthz?full=true`, whose gRPC self-check measurably takes 1.1 to 1.7 seconds
+here. A working repo-server was therefore killed on schedule — exiting 0 through
+a graceful shutdown, so it appeared as `Completed` with a restart count rather
+than as a crash. Each restart drops in-flight manifest generation, which reaches
+the Application as `connection refused` to a port that is simply not listening
+yet, naming neither the probe nor this container.
+
+Raising the CPU request from 50m did not fix it, though it was too low on its
+own merits: the check exceeds a one-second budget on an idle node. The probe was
+measuring something slower than its own timeout. The chart's defaults assume a
 roomier cluster than [ADR 0004](../../docs/adr/0004-kubernetes-on-doks.md) pays
 for, so `values/argocd.yaml` trims:
 
