@@ -55,18 +55,22 @@ controller:
 # limit would reintroduce throttling during exactly the render spikes this is
 # sized for.
 repoServer:
-  # The chart's probes time out after 1 second. The liveness probe calls
-  # /healthz?full=true, which does a gRPC self-check that measurably takes 1.1
-  # to 1.7 seconds here — so a working repo-server gets killed, exits 0 through
-  # a graceful shutdown, and reappears as `Completed` with a restart count
-  # rather than as a crash. Each restart drops in-flight manifest generation,
-  # which surfaces on the Application as `connection refused` to a port that is
-  # simply not listening yet.
+  # /healthz?full=true opens a *new* TLS gRPC connection to the repo-server's
+  # own port and calls Check — a deadlock detector, from argo-cd#5110. It is not
+  # slow; it blocks. Every failure lasts exactly the probe timeout, whatever
+  # that timeout is set to, because the dial does not finish while a large chart
+  # is being rendered on a two-core node.
   #
-  # More CPU did not fix it: the check exceeds a one-second budget on an idle
-  # node. The probe was measuring something slower than its own timeout.
+  # Killing it then starves the manifest cache, so the next attempt renders from
+  # scratch and blocks again. The probe was driving the loop it was meant to
+  # detect.
+  #
+  # So the fix is patience, not a longer timeout: at ten failures on a ten
+  # second period, a render has a hundred seconds to finish and populate the
+  # cache, while a genuine deadlock still gets caught.
   livenessProbe:
     timeoutSeconds: 5
+    failureThreshold: 10
   readinessProbe:
     timeoutSeconds: 5
 
