@@ -42,68 +42,29 @@ to be Healthy rather than merely created.
 ## The Gateway
 
 One entry point; each application attaches its own `HTTPRoute` from its own
-namespace ([ADR 0005](../../docs/adr/0005-gateway-api-envoy-gateway.md)).
-`allowedRoutes.namespaces.from: All` is what permits that, and it is the
-delegation Ingress never had.
+namespace, which `allowedRoutes.namespaces.from: All` is what permits
+([ADR 0005](../../docs/adr/0005-gateway-api-envoy-gateway.md)).
 
-**Two HTTPS listeners**, for the apex and for `*.heptapedal.com`, rather than one
-with no hostname. A hostname-less listener would serve this certificate for
-arbitrary SNI; these serve it for exactly the names it covers.
-
-**HTTP is answered only by a redirect.** Gateway API has no listener-level
-redirect, so plain HTTP goes to an `HTTPRoute` whose only rule is a 301 to
-HTTPS.
-
-**The load balancer's idle timeout is set but unproven.** MCP Streamable HTTP
-holds long-lived connections and DigitalOcean's default is 60 seconds, so the
-`EnvoyProxy` sets
-`service.beta.kubernetes.io/do-loadbalancer-http-idle-timeout-seconds: "600"`.
-Whether it reaches those connections is **not** established: Envoy terminates
-TLS, so the load balancer runs at its default `tcp` protocol, and DigitalOcean
-documents this annotation only in an HTTP context. It costs nothing to set and
-may apply. #20's end-to-end test — holding a session open past 60 seconds — is
-what answers it. If it does not apply, the lever is application-side keepalives,
-not a larger number here.
-
-**Two Envoy replicas**, so a node drain in the monthly upgrade window does not
-take the only ingress path with it. The control plane is deliberately non-HA
-([ADR 0004](../../docs/adr/0004-kubernetes-on-doks.md)); the data plane carries
-live traffic and is a different failure domain.
-
-**The proxies do not live in `gateway`.** Envoy Gateway's default deployment
-model creates the data plane — the Envoy `Deployment` and its `LoadBalancer`
-`Service` — in *its own* namespace, not the `Gateway`'s. So:
+**The data plane is not in `gateway`.** Envoy Gateway creates the Envoy
+`Deployment` and its `LoadBalancer` `Service` in its own namespace:
 
 ```bash
-kubectl -n gateway get gateway heptapedal          # the Gateway, and its address
+kubectl -n gateway get gateway heptapedal          # the Gateway and its address
 kubectl -n envoy-gateway-system get deploy,svc     # the Envoy fleet it provisioned
 ```
 
-Two distinct things share the name: **Envoy Gateway** is the controller, one
-Deployment that watches Gateway API resources and creates proxies; **Envoy** is
-the data plane it creates. Unlike ingress-nginx, where the controller and the
-proxy were the same pods, here the controller provisions a fleet per Gateway.
-(Gateway Namespace Mode would place them beside the Gateway instead; the default
-is fine for one Gateway.)
+**The load balancer's idle timeout is set but unproven.** MCP holds long-lived
+connections against a 60-second default, so the `EnvoyProxy` sets
+`do-loadbalancer-http-idle-timeout-seconds: "600"`. Whether it reaches them is
+not established: Envoy terminates TLS, so the load balancer runs at its default
+`tcp` protocol, and DigitalOcean documents the annotation only for HTTP. #20's
+end-to-end test answers it; if it does not apply, the lever is application-side
+keepalives rather than a larger number.
 
-The `GatewayClass` ties the two together. `controllerName` must match Envoy
-Gateway's own constant, `gateway.envoyproxy.io/gatewayclass-controller` — that
-is how an implementation claims a class and ignores others, and a mismatch
-leaves the Gateway silently unprocessed rather than failing. `parametersRef`
-points at the `EnvoyProxy`, which is where anything Gateway API deliberately has
-no field for lives: replica counts, resource limits, cloud-specific Service
-annotations.
+Two Envoy replicas, so a node drain in the upgrade window does not take the only
+ingress path with it.
 
-**`EnvoyProxy` is configuration, not a proxy** — despite the name. It runs
-nothing and owns no pods; it is closer to a values file that Envoy Gateway reads
-while provisioning the data plane. Nor is `parametersRef` a label selector: it
-names one object by group, kind, name and namespace. Attached to the
-`GatewayClass` as here, it applies to every `Gateway` of that class;
-`Gateway.spec.infrastructure.parametersRef` would override it for one — worth
-knowing when a second application wants an entry point of its own.
-
-Nothing resolves here yet — the apex `A` record pointing at the load balancer is
-#20.
+Nothing resolves here yet — the apex `A` record is #20.
 
 ## cert-manager
 
