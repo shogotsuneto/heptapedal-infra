@@ -3,20 +3,20 @@
 Add-ons every cluster gets, each an Argo CD `Application` ordered by
 `argocd.argoproj.io/sync-wave`.
 
-| Wave | Contents | Status |
-|---|---|---|
-| -1 | namespaces the bundle installs into | in |
-| 0 | Sealed Secrets controller | in |
-| 1 | every `SealedSecret` this bundle needs | with each add-on |
-| 2 | cert-manager; Grafana Alloy | in |
-| 3 | `ClusterIssuer`s and the wildcard `Certificate` | in |
-| 4 | the shared `Gateway` and the HTTPS redirect | in |
+| Wave | Contents                                        | Status           |
+| ---- | ----------------------------------------------- | ---------------- |
+| -1   | namespaces the bundle installs into             | in               |
+| 0    | Sealed Secrets controller                       | in               |
+| 1    | every `SealedSecret` this bundle needs          | with each add-on |
+| 2    | cert-manager; Grafana Alloy                     | in               |
+| 3    | `ClusterIssuer`s and the wildcard `Certificate` | in               |
+| 4    | the shared `Gateway` and the HTTPS redirect     | in               |
 
 The waves follow real dependencies, not tidiness:
 
 - **Namespaces before anything that goes in one.** Declared rather than left to
   each Application's `CreateNamespace=true`, which creates the namespace during
-  *that* Application's sync — too late for a resource scheduled earlier. A
+  _that_ Application's sync — too late for a resource scheduled earlier. A
   namespace is a dependency like any other.
 - **Controller first**, because a `SealedSecret` cannot be decrypted before it
   runs, and its CRD has to exist to be applied at all.
@@ -91,7 +91,7 @@ sealed:
 
 The endpoint URLs are already in `alloy.yaml`. The instance IDs go in the secret
 rather than beside them — not because they are sensitive, but because with an
-existing secret this chart reads username *and* password from it and ignores a
+existing secret this chart reads username _and_ password from it and ignores a
 literal `username:` in the values.
 
 ```bash
@@ -135,30 +135,25 @@ the free tier includes 2,232 and 37,944 per month. Enabling it does start
 metering, which is what the warning in the console means; it does not start
 charging until those are exceeded.
 
-| | measured | allowance | |
-|---|---|---|---|
-| host hours | 1,460 | 2,232 | 65% |
-| container hours, running containers only (38) | 27,740 | 37,944 | 73% |
-| container hours, counting init containers too (53) | 38,690 | 37,944 | **102%** |
+|                                             | projected | allowance |     |
+| ------------------------------------------- | --------- | --------- | --- |
+| host hours                                  | 1,460     | 2,232     | 65% |
+| container hours                             | 27,156    | 37,944    | 72% |
+| active series                               | 4,440     | 10,000    | 44% |
+| container hours, once the application lands | 29,346    | 37,944    | 77% |
 
-The projection before deploying said 63%, from 28 containers plus an estimated
-five for Alloy. Alloy actually added ten, and the Kubernetes Overview dashboard
-counts 53 — which is running containers *plus* init containers.
+**Init containers are not billed.** That was the open question, and the answer
+straddled the allowance — 73% counting only running containers, 102% counting
+init containers as well, which the Kubernetes Overview dashboard does.
 
-**Which of those two is billed is not established, and cannot be checked yet.**
-Init containers run for seconds at pod start, so "active container hours"
-plausibly excludes them and 73% is the likely figure — but that is reasoning.
-Grafana Cloud's usage page reports the metered number, and it reads zero for the
-first day or so while aggregation catches up.
+Settled by arithmetic on the metered figures rather than by argument: 5 host
+hours across two nodes is 2.5 hours elapsed, and 93 container hours over 2.5
+hours is 37.2 containers. The cluster runs 38, with 15 init containers beside
+them. 37.2 is the former — a little under, because the Alloy pods started after
+the rest.
 
-The deadline is not arbitrary: this account is on a 14-day trial, during which
-the limits are not the free ones. Nothing constrains anything until it converts,
-so the number has to be read before then rather than discovered afterwards.
-Tracked as #61.
-
-If it is the higher reading, the levers are the same ones that address the
-series count — and dropping a workload is not among them, since the count is of
-containers that exist, not of metrics collected.
+Worth re-reading over a longer window, and again once the application lands, but
+the shape is settled.
 
 **Host hours effectively cap this cluster at two nodes.** A third would reach
 2,190 of 2,232 — 98%, before any margin for a surge upgrade. Growing the node
@@ -166,16 +161,8 @@ pool therefore moves two budgets, not one: the 24 USD/month in
 [ADR 0004](../../docs/adr/0004-kubernetes-on-doks.md) and this allowance. Neither
 ADR noticed it was constraining the other.
 
-**What it already found.** Within an hour of data flowing, two things that were
-invisible before: the operator using twice the CPU and more memory than the
-requests set for it here, and `cilium-agent` using 703 MiB per node against a
-300 MiB request with no limit. The second matters more — it means capacity
-planning by requests understates this cluster by about 800 MiB, which
-[ADR 0004](../../docs/adr/0004-kubernetes-on-doks.md) now records.
-
-**The series count is the part still unknown.** The free tier allows 10k active
-series, and cAdvisor plus kube-state-metrics can approach that even on two
-nodes.
+**The series count has room.** 4,440 of the 10k allowance, against a worry that
+cAdvisor plus kube-state-metrics might approach it. No trimming needed for now.
 
 The lever is `metricsTuning.includeMetrics` / `excludeMetrics`, per source,
 under `clusterMetrics` — and `excludeNamespaces` for logs. These filter at the
@@ -252,8 +239,8 @@ Commit that file. The name and namespace are part of what is sealed, so
 reference.
 
 **Why `cert-manager` and not the issuer's namespace** — a `ClusterIssuer` has no
-namespace, so cert-manager reads solver credentials from its *cluster resource
-namespace*. Two values are in play and they disagree: the binary defaults
+namespace, so cert-manager reads solver credentials from its _cluster resource
+namespace_. Two values are in play and they disagree: the binary defaults
 `--cluster-resource-namespace` to `kube-system`, while the chart passes
 `--cluster-resource-namespace=$(POD_NAMESPACE)`, which resolves to wherever
 cert-manager is installed. Reading only the source would put this Secret in the
