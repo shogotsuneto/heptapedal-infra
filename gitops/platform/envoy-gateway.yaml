@@ -23,8 +23,20 @@ spec:
     targetRevision: v1.9.1
     helm:
       valuesObject:
-        # Installs the Gateway API CRDs as well as Envoy Gateway's own. DOKS
-        # does not manage Gateway API CRDs, so nothing else owns them.
+        # Installs the Gateway API CRDs, Envoy Gateway's own, and the Gateway
+        # API safe-upgrade admission policy. One switch for all three; the
+        # subchart offers no finer toggle.
+        #
+        # DOKS *does* pre-install Gateway API CRDs — standard channel, bundle
+        # v1.2.1, created seconds after the cluster. This chart replaces them
+        # with experimental v1.6.1, which is what it ships and what Envoy
+        # Gateway v1.9.1 expects. So we are deliberately on the experimental
+        # channel, and deliberately overriding the provider's copies.
+        #
+        # The safe-upgrade policy the same subchart installs forbids exactly
+        # that transition, on the assumption it is accidental. Ours is not, but
+        # it means a CRD left on standard cannot be upgraded in place — see
+        # ../README.md.
         crds:
           enabled: true
 

@@ -61,6 +61,35 @@ provisioned it as `REGIONAL_NETWORK`, a layer-4 load balancer with no HTTP layer
 to time out. #20's end-to-end test answers it; if sessions drop, the lever is
 application-side keepalives.
 
+**Gateway API CRDs come from two places.** DOKS pre-installs them — standard
+channel, bundle v1.2.1 — and the Envoy Gateway chart replaces them with
+experimental v1.6.1, which is what it ships. We are on experimental
+deliberately; there is no toggle for the standard channel short of managing
+these CRDs ourselves.
+
+The same subchart installs a `ValidatingAdmissionPolicy`,
+`safe-upgrades.gateway.networking.k8s.io`, which forbids installing experimental
+CRDs over standard ones. Its rule allows creates (`oldObject == null`) and
+updates where the *existing* object is already experimental — so once a CRD is
+on experimental it upgrades freely, but one left on standard is stuck.
+
+If a CRD is stranded that way, **delete it and let Argo CD recreate it**: a
+create passes the policy, and the guard stays in place for the future.
+
+```bash
+kubectl get crd httproutes.gateway.networking.k8s.io \
+  -o jsonpath='{.metadata.annotations.gateway\.networking\.k8s\.io/channel}{"\n"}'
+kubectl delete crd httproutes.gateway.networking.k8s.io     # takes its HTTPRoutes with it
+argocd app sync envoy-gateway
+```
+
+Deleting a CRD deletes every object of that kind. Check what would go first —
+everything under `gitops/` is recreated by the next sync, anything else is not.
+
+Disabling the policy through `crds.gatewayAPI.safeUpgradePolicy.enabled` would
+also unblock it, at the cost of the guard, and unreliably: the policy would have
+to be pruned before the CRD is applied, and both happen in one sync.
+
 **Large CRDs need server-side apply.** The Envoy Gateway Application sets
 `ServerSideApply=true` because Argo CD's default client-side apply writes the
 whole manifest into an annotation with a 262144-byte limit, which several of
