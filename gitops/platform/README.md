@@ -135,11 +135,25 @@ the free tier includes 2,232 and 37,944 per month. Enabling it does start
 metering, which is what the warning in the console means; it does not start
 charging until those are exceeded.
 
-| | projected | allowance | |
+| | measured | allowance | |
 |---|---|---|---|
 | host hours | 1,460 | 2,232 | 65% |
-| container hours, with Alloy | 24,090 | 37,944 | 63% |
-| container hours, once the application lands | 26,280 | 37,944 | 69% |
+| container hours, running containers only (38) | 27,740 | 37,944 | 73% |
+| container hours, counting init containers too (53) | 38,690 | 37,944 | **102%** |
+
+The projection before deploying said 63%, from 28 containers plus an estimated
+five for Alloy. Alloy actually added ten, and the Kubernetes Overview dashboard
+counts 53 — which is running containers *plus* init containers.
+
+**Which of those two is billed is not established.** Init containers run for
+seconds at pod start, so "active container hours" plausibly excludes them, and
+73% is the likely figure. But the difference straddles the allowance, so it is
+worth reading rather than reasoning about: Grafana Cloud's usage page reports
+the metered number directly, now that data is flowing.
+
+If it is the higher reading, the levers are the same ones that address the
+series count — and dropping a workload is not among them, since the count is of
+containers that exist, not of metrics collected.
 
 **Host hours effectively cap this cluster at two nodes.** A third would reach
 2,190 of 2,232 — 98%, before any margin for a surge upgrade. Growing the node
