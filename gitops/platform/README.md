@@ -9,8 +9,9 @@ Add-ons every cluster gets, each an Argo CD `Application` ordered by
 | 0 | Sealed Secrets controller | in |
 | 1 | every `SealedSecret` this bundle needs | with each add-on |
 | 2 | cert-manager; Grafana Alloy | in, #15 |
-| 3 | `ClusterIssuer`s, the `gateway` namespace, the wildcard `Certificate` | in |
-| 4 | Envoy Gateway and the shared `Gateway` | #13 |
+| 3 | `ClusterIssuer`s and the wildcard `Certificate` | in |
+| 4 | Envoy Gateway | in |
+| 5 | `GatewayClass`, `EnvoyProxy`, the shared `Gateway`, the HTTPS redirect | in |
 
 The waves follow real dependencies, not tidiness:
 
@@ -31,11 +32,39 @@ The waves follow real dependencies, not tidiness:
 - **Issuers after cert-manager**, because their CRDs arrive with it. Those
   resources carry `SkipDryRunOnMissingResource=true` so Argo CD does not fail
   validating a kind it has not seen yet on a cluster built from nothing.
-- **Envoy Gateway last**, because the shared `Gateway` references a certificate
-  cert-manager has to have issued.
+- **Envoy Gateway after cert-manager**, because the `Gateway` it serves
+  references a certificate that has to have been issued; and the `Gateway`
+  itself after Envoy Gateway, whose CRDs define it.
 
 Argo CD assesses each Application's health, so a wave waits for the previous one
 to be Healthy rather than merely created.
+
+## The Gateway
+
+One entry point; each application attaches its own `HTTPRoute` from its own
+namespace, which `allowedRoutes.namespaces.from: All` is what permits
+([ADR 0005](../../docs/adr/0005-gateway-api-envoy-gateway.md)).
+
+**The data plane is not in `gateway`.** Envoy Gateway creates the Envoy
+`Deployment` and its `LoadBalancer` `Service` in its own namespace:
+
+```bash
+kubectl -n gateway get gateway heptapedal          # the Gateway and its address
+kubectl -n envoy-gateway-system get deploy,svc     # the Envoy fleet it provisioned
+```
+
+**The load balancer's idle timeout is set but unproven.** MCP holds long-lived
+connections against a 60-second default, so the `EnvoyProxy` sets
+`do-loadbalancer-http-idle-timeout-seconds: "600"`. Whether it reaches them is
+not established: Envoy terminates TLS, so the load balancer runs at its default
+`tcp` protocol, and DigitalOcean documents the annotation only for HTTP. #20's
+end-to-end test answers it; if it does not apply, the lever is application-side
+keepalives rather than a larger number.
+
+Two Envoy replicas, so a node drain in the upgrade window does not take the only
+ingress path with it.
+
+Nothing resolves here yet — the apex `A` record is #20.
 
 ## cert-manager
 
