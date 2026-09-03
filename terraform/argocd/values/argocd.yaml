@@ -31,27 +31,36 @@ server:
     limits:
       memory: 256Mi
 
-# The application controller is the memory-hungry component: it holds the
-# cluster's resource cache. Generous limit, modest request, because the cost
-# grows with the number of managed objects rather than with traffic.
+# Holds the cluster's resource cache, and does the applying — including
+# server-side apply of the megabyte-scale Gateway API CRDs, which is CPU work
+# under a request that was starving it.
 controller:
   resources:
     requests:
-      cpu: 100m
-      memory: 256Mi
+      cpu: 250m
+      memory: 512Mi
     limits:
-      memory: 768Mi
+      memory: 1Gi
 
-# Renders manifests, including `helm template` over the OCI charts the
-# application ships (ADR 0011). Rendering spikes, so the limit is well above
-# the request.
+# Renders every manifest, which is the heaviest work Argo CD does here: the
+# Envoy Gateway chart alone carries 2.2 MB of CRDs.
+#
+# 50m was far too little. A CPU request is a share under contention, so the
+# renders starved, health checks began taking seconds, the liveness probe
+# failed, and the container was killed — 52 restarts, each exiting 0 after a
+# graceful shutdown, so it read as "Completed" rather than as a crash. Syncs
+# failed around it in ways that named neither CPU nor this container.
+#
+# No CPU limit deliberately: the request is a floor to win contention, and a
+# limit would reintroduce throttling during exactly the render spikes this is
+# sized for.
 repoServer:
   resources:
     requests:
-      cpu: 50m
-      memory: 128Mi
+      cpu: 300m
+      memory: 256Mi
     limits:
-      memory: 512Mi
+      memory: 1Gi
 
 # Installed unconditionally by chart 10.x — there is no top-level toggle. Left
 # idle: ADR 0006 uses app-of-apps until the application count justifies

@@ -97,13 +97,21 @@ should simply stop existing.
 
 | Component | requests | memory limit |
 |---|---|---|
-| application-controller | 100m / 256Mi | 768Mi |
-| repo-server | 50m / 128Mi | 512Mi |
+| application-controller | 250m / 512Mi | 1Gi |
+| repo-server | 300m / 256Mi | 1Gi |
 | server | 50m / 128Mi | 256Mi |
 | applicationset-controller | 25m / 64Mi | 128Mi |
 | redis | 50m / 64Mi | 192Mi |
 
-Roughly **325m CPU and 768Mi requested** in total. The chart's defaults assume a
+Roughly **675m CPU and 1Gi requested** in total.
+
+The repo-server's CPU request is the one that matters. It renders every
+manifest, and the Envoy Gateway chart alone carries 2.2 MB of CRDs. At the 50m
+it was first given, renders starved under contention, health checks began taking
+seconds, the liveness probe failed, and the container was killed — repeatedly,
+each time exiting cleanly, so it showed as `Completed` with a restart count
+rather than as a crash. Syncs failed around it in ways that named neither CPU
+nor this container. The chart's defaults assume a
 roomier cluster than [ADR 0004](../../docs/adr/0004-kubernetes-on-doks.md) pays
 for, so `values/argocd.yaml` trims:
 
