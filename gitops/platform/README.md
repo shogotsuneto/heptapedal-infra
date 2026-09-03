@@ -94,6 +94,14 @@ points at the `EnvoyProxy`, which is where anything Gateway API deliberately has
 no field for lives: replica counts, resource limits, cloud-specific Service
 annotations.
 
+**`EnvoyProxy` is configuration, not a proxy** — despite the name. It runs
+nothing and owns no pods; it is closer to a values file that Envoy Gateway reads
+while provisioning the data plane. Nor is `parametersRef` a label selector: it
+names one object by group, kind, name and namespace. Attached to the
+`GatewayClass` as here, it applies to every `Gateway` of that class;
+`Gateway.spec.infrastructure.parametersRef` would override it for one — worth
+knowing when a second application wants an entry point of its own.
+
 Nothing resolves here yet — the apex `A` record pointing at the load balancer is
 #20.
 
