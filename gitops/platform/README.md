@@ -94,8 +94,20 @@ kubectl create secret generic ghcr-charts -n argocd \
 The label goes *before* `kubeseal` and the annotations *after* — see
 [the sealing recipe](../README.md#secrets) for why the two differ.
 
-`url` carries no `oci://` scheme, and Argo CD matches by prefix, so this one
-credential covers `…/charts/heptapedal-app` and anything published beside it.
+`url` carries no `oci://` scheme, and it is matched **exactly**, not by prefix.
+An Application reaches this chart with `repoURL: ghcr.io/shogotsuneto/charts`
+and `chart: heptapedal-app`, so the `repoURL` is exactly the sealed string and
+the match holds — but a chart published under some *other* path would need its
+own entry. The prefix behaviour belongs to the other secret type, `repo-creds`,
+which is a credential template rather than a repository:
+
+| `secret-type` | Matched by |
+|---|---|
+| `repository` (used here) | [`git.SameURL`](https://github.com/argoproj/argo-cd/blob/v3.5.2/util/db/repository_secrets.go) — equality after normalisation |
+| `repo-creds` | `strings.HasPrefix`, longest prefix winning |
+
+Omitting `project` is deliberate: an entry with no project becomes the fallback
+for every project, which is what `allowFallback` selects in the same file.
 
 ### The token is wider than the job
 
