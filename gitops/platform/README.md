@@ -53,13 +53,19 @@ kubectl -n gateway get gateway heptapedal          # the Gateway and its address
 kubectl -n envoy-gateway-system get deploy,svc     # the Envoy fleet it provisioned
 ```
 
-**The load balancer's idle timeout is set but unproven.** MCP holds long-lived
-connections against a 60-second default, so the `EnvoyProxy` sets
-`do-loadbalancer-http-idle-timeout-seconds: "600"`. Whether it reaches them is
-not established: Envoy terminates TLS, so the load balancer runs at its default
-`tcp` protocol, and DigitalOcean documents the annotation only for HTTP. #20's
-end-to-end test answers it; if it does not apply, the lever is application-side
-keepalives rather than a larger number.
+**The load balancer's idle timeout is probably ineffective**, and kept for the
+cost of one line. MCP holds long-lived connections against a 60-second default,
+so the `EnvoyProxy` sets `do-loadbalancer-http-idle-timeout-seconds: "600"` —
+but Envoy terminates TLS, so the balancer carries plain TCP, and DOKS
+provisioned it as `REGIONAL_NETWORK`, a layer-4 load balancer with no HTTP layer
+to time out. #20's end-to-end test answers it; if sessions drop, the lever is
+application-side keepalives.
+
+**Large CRDs need server-side apply.** The Envoy Gateway Application sets
+`ServerSideApply=true` because Argo CD's default client-side apply writes the
+whole manifest into an annotation with a 262144-byte limit, which several of
+these CRDs exceed. Worth knowing before adding another chart with big CRDs: the
+rejection names an annotation, and the symptoms appear somewhere else entirely.
 
 Two Envoy replicas, so a node drain in the upgrade window does not take the only
 ingress path with it.

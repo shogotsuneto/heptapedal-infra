@@ -47,3 +47,19 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      # Required, not a preference. Argo CD's default client-side apply writes
+      # the whole manifest into the last-applied-configuration annotation, and
+      # these CRDs are larger than the 262144-byte annotation limit:
+      #
+      #   CustomResourceDefinition "envoyproxies.gateway.envoyproxy.io" is
+      #   invalid: metadata.annotations: Too long
+      #
+      # Three CRDs were rejected that way, envoyproxies among them — so the
+      # GatewayClass could not resolve its parametersRef, Envoy fell back to
+      # default settings at one replica, and with externalTrafficPolicy: Local
+      # the node without that replica failed the load balancer's health check.
+      # One annotation limit, three symptoms.
+      #
+      # Server-side apply does not use that annotation.
+      - ServerSideApply=true
