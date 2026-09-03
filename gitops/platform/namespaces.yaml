@@ -18,6 +18,15 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
 ---
+# Telemetry collection. Nothing is stored here — Alloy ships to Grafana Cloud
+# (ADR 0010).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+---
 # Home of the shared Gateway and the wildcard certificate issued for it.
 apiVersion: v1
 kind: Namespace

@@ -18,6 +18,15 @@ Grafana Cloud's free tier covers 2,232 host-hours and 37,944 container-hours per
 month; two nodes is ~1,460 host-hours. Grafana Alloy collects as a DaemonSet at
 roughly 100m CPU / 128Mi per node and doubles as an OTLP receiver.
 
+> **Measured, after the fact:** the DaemonSet is indeed 100m/128Mi per node, but
+> that is not the whole deployment. Grafana's `k8s-monitoring` chart — the
+> supported path, and what produces the metric shape Grafana Cloud's dashboards
+> expect — also brings a metrics collector, a singleton for cluster events,
+> kube-state-metrics and an operator. **375m CPU / 576Mi requested in total**,
+> not the 256Mi this ADR estimated from the DaemonSet alone. The decision below
+> is unaffected: it is still roughly a quarter of `kube-prometheus-stack`, which
+> is the comparison that mattered.
+
 ## Decision
 
 **Grafana Alloy in-cluster, Grafana Cloud free tier as the backend.**
@@ -34,8 +43,10 @@ roughly 100m CPU / 128Mi per node and doubles as an OTLP receiver.
 
 ## Consequences
 
-- Roughly 256Mi total for observability instead of ~2Gi. That headroom is what
-  makes the second application affordable on the same node pool.
+- Roughly 576Mi total for observability instead of ~2Gi — see the measurement
+  above; the 256Mi in this ADR's context was an estimate of one component. The
+  headroom that remains is still what makes the second application affordable on
+  the same node pool.
 - Dashboards survive cluster rebuilds, which matters when the cluster is
   disposable by design.
 - Telemetry outlives the cluster it describes — a post-mortem is still possible

@@ -8,10 +8,9 @@ Add-ons every cluster gets, each an Argo CD `Application` ordered by
 | -1 | namespaces the bundle installs into | in |
 | 0 | Sealed Secrets controller | in |
 | 1 | every `SealedSecret` this bundle needs | with each add-on |
-| 2 | cert-manager | in |
+| 2 | cert-manager; Grafana Alloy | in |
 | 3 | `ClusterIssuer`s and the wildcard `Certificate` | in |
 | 4 | the shared `Gateway` and the HTTPS redirect | in |
-| — | Grafana Alloy | #15 |
 
 The waves follow real dependencies, not tidiness:
 
@@ -61,6 +60,43 @@ Two HTTPS listeners, apex and wildcard, rather than one without a hostname: a
 hostname-less listener would serve this certificate for arbitrary SNI.
 
 Nothing resolves here yet — the apex `A` record is #20.
+
+## Telemetry
+
+Alloy ships metrics, logs and Kubernetes events to Grafana Cloud
+([ADR 0010](../../docs/adr/0010-observability-grafana-cloud.md)). Nothing is
+stored in the cluster, so dashboards and history survive a rebuild — which is
+also why there is no metrics-server here and `kubectl top` does not work.
+
+**Its credentials.** Grafana Cloud → the stack's details page gives, for each of
+Prometheus and Loki, a numeric user and an endpoint URL; the password is one
+access policy token with `metrics:write` and `logs:write`. The URLs live in
+`alloy.yaml` — they are endpoints, not secrets. The rest is sealed:
+
+```bash
+kubectl create secret generic grafana-cloud -n monitoring \
+  --dry-run=client -o yaml \
+  --from-literal=prometheus-username="$GC_PROM_USER" \
+  --from-literal=prometheus-password="$GC_TOKEN" \
+  --from-literal=loki-username="$GC_LOKI_USER" \
+  --from-literal=loki-password="$GC_TOKEN" \
+  | kubeseal --format yaml \
+  | kubectl annotate --local -f - -o yaml \
+      argocd.argoproj.io/sync-wave=1 \
+      argocd.argoproj.io/sync-options=SkipDryRunOnMissingResource=true \
+  > gitops/platform/grafana-cloud.sealed.yaml
+```
+
+**What it costs.** 375m CPU and 576Mi requested across five components: the
+Alloy DaemonSet for logs, a StatefulSet for metrics, a singleton for events,
+kube-state-metrics, and the Alloy operator. The chart sets requests on only two
+of those, so the rest are set here — without them they would be BestEffort and
+first to be evicted under memory pressure.
+
+**Watch the series count.** The free tier allows 10k active series, and
+cAdvisor plus kube-state-metrics can approach that even on two nodes. If it is
+exceeded, the chart's metric allow-lists are the lever. Worth checking in
+Grafana Cloud once data starts arriving rather than guessing now.
 
 ## cert-manager
 
