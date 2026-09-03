@@ -4,7 +4,9 @@
 #
 # Wave 5, after Envoy Gateway's CRDs and controller.
 
-# Data-plane configuration, referenced by the GatewayClass below.
+# Configuration for the data plane — not a proxy, despite the name. It runs
+# nothing and owns no pods; Envoy Gateway reads it while provisioning, the way
+# Helm reads a values file. Referenced by the GatewayClass below.
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: EnvoyProxy
 metadata:
@@ -57,7 +59,17 @@ metadata:
     argocd.argoproj.io/sync-wave: "5"
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
 spec:
+  # Which implementation owns this class. Envoy Gateway's own constant — a
+  # mismatch is not an error, it just means no controller claims the class and
+  # the Gateway sits unprocessed.
   controllerName: gateway.envoyproxy.io/gatewayclass-controller
+
+  # A pointer to the EnvoyProxy config above, named rather than label-matched.
+  # Gateway API is vendor-neutral and so has no field for replica counts,
+  # resource limits or cloud-specific Service annotations; this is where an
+  # implementation's own settings hang off it. Here it applies to every Gateway
+  # of this class — Gateway.spec.infrastructure.parametersRef would override it
+  # for a single one.
   parametersRef:
     group: gateway.envoyproxy.io
     kind: EnvoyProxy
