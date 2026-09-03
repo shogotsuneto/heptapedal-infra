@@ -48,6 +48,11 @@ Annotate **after** `kubeseal`: doing it before puts the annotations in
 `spec.template`, where they apply to the decrypted Secret rather than to the
 `SealedSecret` Argo CD is scheduling.
 
+Anything the *decrypted* Secret needs takes the opposite route — add it before
+`kubeseal`, which copies the input's metadata into `spec.template`. Argo CD's
+repository credentials are found by such a label, so `ghcr-registry` below is
+labelled first and annotated after.
+
 Both annotations are required. The wave keeps sealed values ahead of what
 consumes them. `SkipDryRunOnMissingResource` matters only on a cluster built
 from nothing, where Argo CD validates every task before any wave runs — so the
@@ -74,6 +79,7 @@ Two rules carry over from the ADR:
 |---|---|---|
 | `platform/cert-manager-do-token.sealed.yaml` | `cert-manager` / `digitalocean-dns` | DigitalOcean → API → Tokens. Scoped to `domain:read`, `domain:create`, `domain:delete` — see [platform/README](platform/README.md#its-digitalocean-token) |
 | `platform/grafana-cloud.sealed.yaml` | `monitoring` / `grafana-cloud` | Grafana Cloud's Kubernetes Monitoring configuration wizard, which emits both instance IDs and mints the token — see [platform/README](platform/README.md#telemetry) |
+| `platform/ghcr-registry.sealed.yaml` | `argocd` / `ghcr-charts` | GitHub → Settings → Developer settings → Tokens (classic), `read:packages` — see [platform/README](platform/README.md#the-ghcr-registry-credential) |
 
 Every `SealedSecret` committed here gets a row. A row without a recoverable
 source is the invariant being broken.
