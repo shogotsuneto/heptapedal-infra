@@ -134,8 +134,18 @@ ADR noticed it was constraining the other.
 
 **The series count is the part still unknown.** The free tier allows 10k active
 series, and cAdvisor plus kube-state-metrics can approach that even on two
-nodes. The chart's metric allow-lists are the lever if it goes over — worth
-checking once data arrives rather than trimming pre-emptively.
+nodes.
+
+The lever is `metricsTuning.includeMetrics` / `excludeMetrics`, per source,
+under `clusterMetrics` — and `excludeNamespaces` for logs. These filter at the
+collector, before anything is sent, so they cut egress and collector CPU as well
+as the series count. Nothing about them is server-side: the wizard's "advanced
+tuning" screens only write these same values into the file it generates, which
+this repository does not use.
+
+Deploy with the defaults, read the actual series count in Grafana Cloud, and
+trim from there. Trimming first means dropping metrics without knowing which
+were load-bearing.
 
 ## cert-manager
 
