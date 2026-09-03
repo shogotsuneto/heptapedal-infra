@@ -111,6 +111,12 @@ resources for group version bitnami.com/v1alpha1
 
 On an existing cluster the CRD is already there, so nothing complains.
 
+**Adding it to an existing file does not require resealing.** The annotations
+are metadata on the `SealedSecret`, unrelated to the encrypted payload — which
+matters, because `kubeseal` fetches its public key from the controller, and the
+controller is what the failing validation is blocking. Editing the file is the
+only way out of that circle.
+
 Commit that file. The name and namespace are part of what is sealed, so
 `digitalocean-dns` in `cert-manager` has to match what the `ClusterIssuer`s
 reference.
