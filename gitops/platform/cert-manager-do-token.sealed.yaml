@@ -2,6 +2,7 @@ apiVersion: bitnami.com/v1alpha1
 kind: SealedSecret
 metadata:
   annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/sync-wave: "1"
   name: digitalocean-dns
   namespace: cert-manager
