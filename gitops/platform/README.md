@@ -120,10 +120,11 @@ A classic `read:packages` token reads *every* package on the account. The
 [DigitalOcean token](#its-digitalocean-token) below could be narrowed to three
 verbs on one resource; this one has no equivalent.
 
-That is the running cost of ADR 0011's "private for now", and it is no longer
-hypothetical: one account-wide credential in the cluster, plus a second copy of
-it as an `imagePullSecret` in #18. Publishing the packages deletes both secrets
-and this section. Worth deciding in #18, when the second copy would be created.
+That is the running cost of ADR 0011's "private for now", which has now been
+weighed and kept: the packages stay private, and the charts gain
+`imagePullSecrets` support instead ([heptapedal#61](https://github.com/shogotsuneto/heptapedal/issues/61)).
+So this credential is sealed twice — here for rendering, and again in the
+application namespace for pulling — and a rotation touches both.
 
 ## Telemetry
 
