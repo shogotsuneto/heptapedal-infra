@@ -1,0 +1,110 @@
+# Telemetry to Grafana Cloud ([ADR 0010](../../docs/adr/0010-observability-grafana-cloud.md)).
+#
+# The k8s-monitoring chart rather than the bare Alloy chart: Grafana Cloud's
+# Kubernetes dashboards expect a particular metric shape, and reproducing that
+# by hand would forfeit most of what the hosted backend is for.
+#
+# Wave 2, after the SealedSecret carrying its Grafana Cloud credentials.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: alloy
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: k8s-monitoring
+    targetRevision: 4.5.0
+    helm:
+      valuesObject:
+        cluster:
+          name: heptapedal
+
+        # Endpoints are per-stack identifiers, not secrets, so they live here.
+        #
+        # The instance IDs do not, even though they are equally public: with an
+        # existing secret this chart reads username *and* password from it, and
+        # a literal `username:` in these values is ignored. Prometheus and Loki
+        # have different IDs, so they need different keys in the one secret.
+        # Shape follows the chart's own external-secrets example.
+        destinations:
+          grafana-cloud-metrics:
+            type: prometheus
+            url: https://prometheus-prod-32-prod-ca-east-0.grafana.net/api/prom/push
+            auth:
+              type: basic
+              usernameKey: prometheus-username
+              passwordKey: access-token
+            secret:
+              create: false
+              name: grafana-cloud
+              namespace: monitoring
+          grafana-cloud-logs:
+            type: loki
+            url: https://logs-prod-018.grafana.net/loki/api/v1/push
+            auth:
+              type: basic
+              usernameKey: loki-username
+              passwordKey: access-token
+            secret:
+              create: false
+              name: grafana-cloud
+              namespace: monitoring
+
+        # Every feature is opt-in, so this list is the whole footprint.
+        # Container and node resource metrics — the history that a live
+        # `kubectl top` cannot give, since a spike is over by the time you look.
+        clusterMetrics:
+          enabled: true
+          collector: alloy-metrics
+
+        # Kubernetes events. Worth its own collector: events are what named the
+        # repo-server's liveness-probe kills, and they expire from the API after
+        # an hour.
+        clusterEvents:
+          enabled: true
+          collector: alloy-singleton
+
+        podLogsViaLoki:
+          enabled: true
+          collector: alloy-logs
+
+        collectors:
+          alloy-metrics:
+            presets: [small, statefulset]
+          alloy-logs:
+            presets: [daemonset, filesystem-log-reader, small]
+          # Cluster events only, so smaller than the preset would give it.
+          alloy-singleton:
+            presets: [singleton]
+            alloy:
+              resources:
+                requests: {cpu: 25m, memory: 64Mi}
+                limits: {memory: 128Mi}
+
+        # Kubernetes object state — replica counts, conditions, phases. The
+        # chart ships it without resource requests, which would make it
+        # BestEffort and first to be evicted under pressure.
+        telemetryServices:
+          kube-state-metrics:
+            deploy: true
+            resources:
+              requests: {cpu: 25m, memory: 64Mi}
+              limits: {memory: 192Mi}
+
+        alloy-operator:
+          resources:
+            requests: {cpu: 25m, memory: 64Mi}
+            limits: {memory: 128Mi}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

@@ -73,6 +73,7 @@ Two rules carry over from the ADR:
 | Sealed Secret | Namespace / name | Value from |
 |---|---|---|
 | `platform/cert-manager-do-token.sealed.yaml` | `cert-manager` / `digitalocean-dns` | DigitalOcean → API → Tokens. Scoped to `domain:read`, `domain:create`, `domain:delete` — see [platform/README](platform/README.md#its-digitalocean-token) |
+| `platform/grafana-cloud.sealed.yaml` | `monitoring` / `grafana-cloud` | Grafana Cloud's Kubernetes Monitoring configuration wizard, which emits both instance IDs and mints the token — see [platform/README](platform/README.md#telemetry) |
 
 Every `SealedSecret` committed here gets a row. A row without a recoverable
 source is the invariant being broken.

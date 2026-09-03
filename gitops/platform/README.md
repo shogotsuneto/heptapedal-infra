@@ -8,10 +8,9 @@ Add-ons every cluster gets, each an Argo CD `Application` ordered by
 | -1 | namespaces the bundle installs into | in |
 | 0 | Sealed Secrets controller | in |
 | 1 | every `SealedSecret` this bundle needs | with each add-on |
-| 2 | cert-manager | in |
+| 2 | cert-manager; Grafana Alloy | in |
 | 3 | `ClusterIssuer`s and the wildcard `Certificate` | in |
 | 4 | the shared `Gateway` and the HTTPS redirect | in |
-| — | Grafana Alloy | #15 |
 
 The waves follow real dependencies, not tidiness:
 
@@ -61,6 +60,107 @@ Two HTTPS listeners, apex and wildcard, rather than one without a hostname: a
 hostname-less listener would serve this certificate for arbitrary SNI.
 
 Nothing resolves here yet — the apex `A` record is #20.
+
+## Telemetry
+
+Alloy ships metrics, logs and Kubernetes events to Grafana Cloud
+([ADR 0010](../../docs/adr/0010-observability-grafana-cloud.md)). Nothing is
+stored in the cluster, so dashboards and history survive a rebuild — which is
+also why there is no metrics-server here and `kubectl top` does not work.
+
+**Getting the credentials.** Activate the Kubernetes Monitoring app in Grafana
+Cloud, then run its configuration wizard — but do not apply what it generates.
+This repository already has the Application; the wizard is only the reliable way
+to read off the right values, since it emits a `k8s-monitoring` configuration
+containing your stack's endpoints and instance IDs and mints a token for them.
+
+Activation matters on its own: it is what installs the Kubernetes dashboards,
+which is most of why this chart was chosen over a hand-written Alloy config.
+
+**Decline the managed discovery pipeline** the wizard offers. That is Fleet
+Management: Grafana Cloud pushing collector configuration remotely, which Alloy
+polls for and applies. It would be a second source of truth for what
+`alloy.yaml` already decides — living outside git, outside review, and not
+reproduced by a cluster rebuild. The values here do not opt in, and the rendered
+output contains no `remotecfg` block.
+
+Take from the wizard the two endpoint URLs, the two numeric usernames, and the
+token.
+The URLs go into `alloy.yaml` — they are endpoints, not secrets. The rest is
+sealed:
+
+The endpoint URLs are already in `alloy.yaml`. The instance IDs go in the secret
+rather than beside them — not because they are sensitive, but because with an
+existing secret this chart reads username *and* password from it and ignores a
+literal `username:` in the values.
+
+```bash
+kubectl create secret generic grafana-cloud -n monitoring \
+  --dry-run=client -o yaml \
+  --from-literal=prometheus-username=3558878 \
+  --from-literal=loki-username=1775114 \
+  --from-literal=access-token="$GC_TOKEN" \
+  | kubeseal --format yaml \
+  | kubectl annotate --local -f - -o yaml \
+      argocd.argoproj.io/sync-wave=1 \
+      argocd.argoproj.io/sync-options=SkipDryRunOnMissingResource=true \
+  > gitops/platform/grafana-cloud.sealed.yaml
+```
+
+One token serves both endpoints.
+
+**Not the wizard's token.** The Kubernetes Monitoring wizard configures Fleet
+Management, so what it mints is a fleet-management credential and it emits no
+destinations at all — which is why it shows a single user ID that belongs to
+neither Prometheus nor Loki. Create an access policy token with write scopes for
+metrics and logs instead: Cloud Portal → Access Policies.
+
+If the scopes are wrong the failure appears in the Alloy logs and nowhere in
+Grafana Cloud.
+
+The chart also renders `ca_pem`, `cert_pem` and `key_pem` reading `ca`, `cert`
+and `key` from this secret. Leaving them out is correct and is what the chart's
+own external-secrets example does: a missing key reads as empty, and Alloy
+treats empty TLS fields as unset.
+
+**What it costs.** 375m CPU and 576Mi requested across five components: the
+Alloy DaemonSet for logs, a StatefulSet for metrics, a singleton for events,
+kube-state-metrics, and the Alloy operator. The chart sets requests on only two
+of those, so the rest are set here — without them they would be BestEffort and
+first to be evicted under memory pressure.
+
+**It is free, and the margin is measurable.** Grafana Cloud bills Kubernetes
+Monitoring as its own dimension — active host hours and container hours — and
+the free tier includes 2,232 and 37,944 per month. Enabling it does start
+metering, which is what the warning in the console means; it does not start
+charging until those are exceeded.
+
+| | projected | allowance | |
+|---|---|---|---|
+| host hours | 1,460 | 2,232 | 65% |
+| container hours, with Alloy | 24,090 | 37,944 | 63% |
+| container hours, once the application lands | 26,280 | 37,944 | 69% |
+
+**Host hours effectively cap this cluster at two nodes.** A third would reach
+2,190 of 2,232 — 98%, before any margin for a surge upgrade. Growing the node
+pool therefore moves two budgets, not one: the 24 USD/month in
+[ADR 0004](../../docs/adr/0004-kubernetes-on-doks.md) and this allowance. Neither
+ADR noticed it was constraining the other.
+
+**The series count is the part still unknown.** The free tier allows 10k active
+series, and cAdvisor plus kube-state-metrics can approach that even on two
+nodes.
+
+The lever is `metricsTuning.includeMetrics` / `excludeMetrics`, per source,
+under `clusterMetrics` — and `excludeNamespaces` for logs. These filter at the
+collector, before anything is sent, so they cut egress and collector CPU as well
+as the series count. Nothing about them is server-side: the wizard's "advanced
+tuning" screens only write these same values into the file it generates, which
+this repository does not use.
+
+Deploy with the defaults, read the actual series count in Grafana Cloud, and
+trim from there. Trimming first means dropping metrics without knowing which
+were load-bearing.
 
 ## cert-manager
 
