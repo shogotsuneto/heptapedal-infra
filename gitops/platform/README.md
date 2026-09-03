@@ -145,11 +145,16 @@ The projection before deploying said 63%, from 28 containers plus an estimated
 five for Alloy. Alloy actually added ten, and the Kubernetes Overview dashboard
 counts 53 — which is running containers *plus* init containers.
 
-**Which of those two is billed is not established.** Init containers run for
-seconds at pod start, so "active container hours" plausibly excludes them, and
-73% is the likely figure. But the difference straddles the allowance, so it is
-worth reading rather than reasoning about: Grafana Cloud's usage page reports
-the metered number directly, now that data is flowing.
+**Which of those two is billed is not established, and cannot be checked yet.**
+Init containers run for seconds at pod start, so "active container hours"
+plausibly excludes them and 73% is the likely figure — but that is reasoning.
+Grafana Cloud's usage page reports the metered number, and it reads zero for the
+first day or so while aggregation catches up.
+
+The deadline is not arbitrary: this account is on a 14-day trial, during which
+the limits are not the free ones. Nothing constrains anything until it converts,
+so the number has to be read before then rather than discovered afterwards.
+Tracked as #61.
 
 If it is the higher reading, the levers are the same ones that address the
 series count — and dropping a workload is not among them, since the count is of
