@@ -296,11 +296,13 @@ rather than predicts:
 
 ```
 # digitalocean_kubernetes_cluster.heptapedal must be replaced
-      ~ size = "s-2vcpu-4gb" -> "s-2vcpu-8gb" # forces replacement
+      ~ size = "s-2vcpu-4gb" -> "<any other size>" # forces replacement
 ```
 
 The node pool is declared inline in `digitalocean_kubernetes_cluster`, so its
-`size` is part of the cluster's identity. **Changing it destroys the cluster and
+`size` is part of the cluster's identity. Any change triggers this; the probe
+that produced the line above used an arbitrary slug, since Terraform does not
+validate it before planning. **Changing it destroys the cluster and
 everything Argo CD has put in it.** Declaring workloads in a separate
 `digitalocean_kubernetes_node_pool` would make size a pool-level change instead.
 
