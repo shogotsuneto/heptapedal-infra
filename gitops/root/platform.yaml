@@ -1,8 +1,8 @@
 # The platform bundle: the add-ons every cluster gets. Curated by hand and
 # small, which is what app-of-apps is good at (ADR 0006).
 #
-# Wave 0 — the applications in wave 1 need cert-manager to have issued a
-# certificate and Envoy Gateway to be listening before they are worth deploying.
+# Wave 0 — the applications in wave 1 need a certificate issued and the shared
+# Gateway listening before they are worth deploying.
 # Argo CD waits for this Application to report Healthy before starting wave 1.
 apiVersion: argoproj.io/v1alpha1
 kind: Application

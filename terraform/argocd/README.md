@@ -106,8 +106,8 @@ should simply stop existing.
 Roughly **675m CPU and 1Gi requested** in total.
 
 The repo-server's CPU request is the one that matters. It renders every
-manifest, and the Envoy Gateway chart alone carries 2.2 MB of CRDs. At the 50m
-it was first given, renders starved under contention, health checks began taking
+manifest, and charts carrying megabytes of CRDs are routine. At the 50m it was
+first given, renders starved under contention, health checks began taking
 seconds, the liveness probe failed, and the container was killed — repeatedly,
 each time exiting cleanly, so it showed as `Completed` with a restart count
 rather than as a crash. Syncs failed around it in ways that named neither CPU

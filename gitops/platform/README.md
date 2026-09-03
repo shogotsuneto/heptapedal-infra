@@ -8,20 +8,17 @@ Add-ons every cluster gets, each an Argo CD `Application` ordered by
 | -1 | namespaces the bundle installs into | in |
 | 0 | Sealed Secrets controller | in |
 | 1 | every `SealedSecret` this bundle needs | with each add-on |
-| 2 | cert-manager; Grafana Alloy | in, #15 |
+| 2 | cert-manager | in |
 | 3 | `ClusterIssuer`s and the wildcard `Certificate` | in |
-| 4 | Envoy Gateway | in |
-| 5 | `GatewayClass`, `EnvoyProxy`, the shared `Gateway`, the HTTPS redirect | in |
+| 4 | the shared `Gateway` and the HTTPS redirect | in |
+| — | Grafana Alloy | #15 |
 
 The waves follow real dependencies, not tidiness:
 
 - **Namespaces before anything that goes in one.** Declared rather than left to
   each Application's `CreateNamespace=true`, which creates the namespace during
-  *that* Application's sync — too late for a resource scheduled earlier. The
-  cert-manager token is a wave-1 `SealedSecret` in `cert-manager`, and the
-  Application that would have created that namespace runs at wave 2: wave 1
-  fails, wave 2 never starts, and the bundle deadlocks on `namespaces
-  "cert-manager" not found`. A namespace is a dependency like any other.
+  *that* Application's sync — too late for a resource scheduled earlier. A
+  namespace is a dependency like any other.
 - **Controller first**, because a `SealedSecret` cannot be decrypted before it
   runs, and its CRD has to exist to be applied at all.
 - **Sealed values in a wave of their own**, ahead of everything that consumes
@@ -32,9 +29,8 @@ The waves follow real dependencies, not tidiness:
 - **Issuers after cert-manager**, because their CRDs arrive with it. Those
   resources carry `SkipDryRunOnMissingResource=true` so Argo CD does not fail
   validating a kind it has not seen yet on a cluster built from nothing.
-- **Envoy Gateway after cert-manager**, because the `Gateway` it serves
-  references a certificate that has to have been issued; and the `Gateway`
-  itself after Envoy Gateway, whose CRDs define it.
+- **The Gateway last**, because its listeners serve a certificate cert-manager
+  has to have issued.
 
 Argo CD assesses each Application's health, so a wave waits for the previous one
 to be Healthy rather than merely created.
@@ -45,30 +41,24 @@ One entry point; each application attaches its own `HTTPRoute` from its own
 namespace, which `allowedRoutes.namespaces.from: All` is what permits
 ([ADR 0005](../../docs/adr/0005-gateway-api-envoy-gateway.md)).
 
-**The data plane is not in `gateway`.** Envoy Gateway creates the Envoy
-`Deployment` and its `LoadBalancer` `Service` in its own namespace:
+**The implementation is DigitalOcean's** — the `cilium` GatewayClass, running
+before anything here is deployed ([ADR 0014](../../docs/adr/0014-use-the-provider-gateway-implementation.md)).
+Nothing in this bundle installs a controller or owns Gateway API CRDs.
 
 ```bash
-kubectl -n gateway get gateway heptapedal          # the Gateway and its address
-kubectl -n envoy-gateway-system get deploy,svc     # the Envoy fleet it provisioned
+kubectl get gatewayclass                     # cilium, Accepted
+kubectl -n gateway get gateway heptapedal    # PROGRAMMED, and its address
 ```
 
-**The load balancer's idle timeout is probably ineffective**, and kept for the
-cost of one line. MCP holds long-lived connections against a 60-second default,
-so the `EnvoyProxy` sets `do-loadbalancer-http-idle-timeout-seconds: "600"` —
-but Envoy terminates TLS, so the balancer carries plain TCP, and DOKS
-provisioned it as `REGIONAL_NETWORK`, a layer-4 load balancer with no HTTP layer
-to time out. #20's end-to-end test answers it; if sessions drop, the lever is
+**Load balancer settings live in `spec.infrastructure.annotations`**, which
+Gateway API caps at eight entries. The idle timeout there is probably
+ineffective — the balancer carries TLS-terminated traffic as plain TCP, and
+DigitalOcean documents the annotation only for HTTP — and is kept for the cost
+of a line. #20's end-to-end test decides it; if MCP sessions drop, the lever is
 application-side keepalives.
 
-**Large CRDs need server-side apply.** The Envoy Gateway Application sets
-`ServerSideApply=true` because Argo CD's default client-side apply writes the
-whole manifest into an annotation with a 262144-byte limit, which several of
-these CRDs exceed. Worth knowing before adding another chart with big CRDs: the
-rejection names an annotation, and the symptoms appear somewhere else entirely.
-
-Two Envoy replicas, so a node drain in the upgrade window does not take the only
-ingress path with it.
+Two HTTPS listeners, apex and wildcard, rather than one without a hostname: a
+hostname-less listener would serve this certificate for arbitrary SNI.
 
 Nothing resolves here yet — the apex `A` record is #20.
 

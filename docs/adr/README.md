@@ -24,6 +24,7 @@ considered" section is the one that earns its keep.
 | [0011](0011-artifact-distribution-ghcr.md) | Keep GHCR packages private for now | Accepted |
 | [0012](0012-treat-the-repository-as-publishable.md) | Treat this repository as publishable | Accepted |
 | [0013](0013-region-sfo3.md) | Run everything in sfo3 | Accepted |
+| [0014](0014-use-the-provider-gateway-implementation.md) | Use DigitalOcean's Gateway API implementation | Accepted |
 
 ## Statuses
 
