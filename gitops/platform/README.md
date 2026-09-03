@@ -92,9 +92,24 @@ Argo CD is scheduling.
 kubectl create secret generic digitalocean-dns -n cert-manager \
   --dry-run=client -o yaml --from-literal=access-token="$DO_DNS_TOKEN" \
   | kubeseal --format yaml \
-  | kubectl annotate --local -f - -o yaml argocd.argoproj.io/sync-wave=1 \
+  | kubectl annotate --local -f - -o yaml \
+      argocd.argoproj.io/sync-wave=1 \
+      argocd.argoproj.io/sync-options=SkipDryRunOnMissingResource=true \
   > gitops/platform/cert-manager-do-token.sealed.yaml
 ```
+
+`SkipDryRunOnMissingResource` matters only on a cluster built from nothing,
+which is why it was missed. Argo CD validates every task before any wave runs,
+so a `SealedSecret` is checked against a `bitnami.com/v1alpha1` that the wave-0
+controller has not installed yet, and the whole bundle fails validation before
+wave 0 gets to run:
+
+```
+one or more synchronization tasks are not valid: failed to discover server
+resources for group version bitnami.com/v1alpha1
+```
+
+On an existing cluster the CRD is already there, so nothing complains.
 
 Commit that file. The name and namespace are part of what is sealed, so
 `digitalocean-dns` in `cert-manager` has to match what the `ClusterIssuer`s

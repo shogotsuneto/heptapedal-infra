@@ -37,8 +37,22 @@ defaults — so sealing needs no flags:
 ```bash
 kubectl create secret generic NAME -n NAMESPACE \
   --dry-run=client -o yaml --from-literal=key=value \
-  | kubeseal --format yaml > gitops/.../NAME.yaml
+  | kubeseal --format yaml \
+  | kubectl annotate --local -f - -o yaml \
+      argocd.argoproj.io/sync-wave=1 \
+      argocd.argoproj.io/sync-options=SkipDryRunOnMissingResource=true \
+  > gitops/.../NAME.yaml
 ```
+
+Annotate **after** `kubeseal`: doing it before puts the annotations in
+`spec.template`, where they apply to the decrypted Secret rather than to the
+`SealedSecret` Argo CD is scheduling.
+
+Both annotations are required. The wave keeps sealed values ahead of what
+consumes them. `SkipDryRunOnMissingResource` matters only on a cluster built
+from nothing, where Argo CD validates every task before any wave runs — so the
+`SealedSecret` is checked against a CRD the wave-0 controller has not installed
+yet, and the bundle fails validation before wave 0 can run.
 
 Default scoping binds each ciphertext to one namespace **and** name, so the
 `-n` and `NAME` above are part of what is encrypted: renaming either means
