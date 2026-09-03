@@ -97,10 +97,13 @@ spec:
               requests: {cpu: 25m, memory: 64Mi}
               limits: {memory: 192Mi}
 
+        # Measured at ~50m and ~70Mi once running, against the 25m/64Mi first
+        # guessed here. A request below actual usage is a false declaration to
+        # the scheduler, which packs nodes by requests.
         alloy-operator:
           resources:
-            requests: {cpu: 25m, memory: 64Mi}
-            limits: {memory: 128Mi}
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {memory: 192Mi}
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring

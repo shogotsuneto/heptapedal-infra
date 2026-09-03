@@ -41,6 +41,15 @@ Monthly cost:
 
 ## Consequences
 
+> **Measured, once telemetry existed:** two figures in this ADR's reasoning are
+> optimistic. A 4 GB node is **3.0 GiB allocatable** — DigitalOcean reserves
+> about a quarter — so the pool is ~6.0 GiB, not 8. And planning by *requests*
+> understates reality: `cilium-agent` requests 300 MiB per node and uses ~700,
+> with no limit to stop it, leaving ~800 MiB unaccounted across the cluster.
+> Real headroom is therefore roughly 800 MiB less than the request arithmetic
+> suggests, which matters most for the embeddings server's 1 GiB request and
+> 2 GiB ceiling.
+
 - ~20 USD/month of headroom for the second application, without re-architecting.
 - Two nodes rather than one, at identical cost to a single `s-4vcpu-8gb`: real
   scheduling constraints, `topologySpreadConstraints` that mean something, and a
