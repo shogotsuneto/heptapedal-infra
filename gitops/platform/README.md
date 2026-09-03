@@ -61,6 +61,58 @@ hostname-less listener would serve this certificate for arbitrary SNI.
 
 Nothing resolves here yet — the apex `A` record is #20.
 
+## The GHCR registry credential
+
+The application's Helm chart is a private OCI artifact
+([ADR 0011](../../docs/adr/0011-artifact-distribution-ghcr.md)), so Argo CD needs
+credentials to *render* it. That is a different secret from the
+`imagePullSecret` the nodes need to pull the images, which lands with the
+application in #18.
+
+Argo CD reads repository credentials from a labelled Secret in its own
+namespace, which Terraform creates along with Argo CD. For an OCI registry the
+fields are `type: helm` plus `enableOCI`:
+
+```bash
+kubectl create secret generic ghcr-charts -n argocd \
+  --dry-run=client -o yaml \
+  --from-literal=name=ghcr-charts \
+  --from-literal=url=ghcr.io/shogotsuneto/charts \
+  --from-literal=type=helm \
+  --from-literal=enableOCI=true \
+  --from-literal=username=shogotsuneto \
+  --from-literal=password="$GHCR_TOKEN" \
+  | kubectl label --local -f - -o yaml \
+      argocd.argoproj.io/secret-type=repository \
+  | kubeseal --format yaml \
+  | kubectl annotate --local -f - -o yaml \
+      argocd.argoproj.io/sync-wave=1 \
+      argocd.argoproj.io/sync-options=SkipDryRunOnMissingResource=true \
+  > gitops/platform/ghcr-registry.sealed.yaml
+```
+
+The label goes *before* `kubeseal` and the annotations *after* — see
+[the sealing recipe](../README.md#secrets) for why the two differ.
+
+`url` carries no `oci://` scheme, and Argo CD matches by prefix, so this one
+credential covers `…/charts/heptapedal-app` and anything published beside it.
+
+### The token is wider than the job
+
+GitHub documents a **classic** PAT with `read:packages` here. Fine-grained
+tokens are contested for the container registry, and classic tokens are
+separately under sunset pressure — so this is the reliable choice today and a
+known future edit either way.
+
+A classic `read:packages` token reads *every* package on the account. The
+[DigitalOcean token](#its-digitalocean-token) below could be narrowed to three
+verbs on one resource; this one has no equivalent.
+
+That is the running cost of ADR 0011's "private for now", and it is no longer
+hypothetical: one account-wide credential in the cluster, plus a second copy of
+it as an `imagePullSecret` in #18. Publishing the packages deletes both secrets
+and this section. Worth deciding in #18, when the second copy would be created.
+
 ## Telemetry
 
 Alloy ships metrics, logs and Kubernetes events to Grafana Cloud
