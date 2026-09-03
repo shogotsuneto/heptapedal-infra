@@ -1,102 +1,36 @@
 # The shared Gateway: one entry point, and each application attaches its own
 # HTTPRoute from its own namespace. That delegation is what Ingress never had
-# and the reason ADR 0005 chose Gateway API over another Ingress controller.
+# and the reason ADR 0005 chose Gateway API.
 #
-# Wave 5, after Envoy Gateway's CRDs and controller.
-
-# Configuration for the data plane — not a proxy, despite the name. It runs
-# nothing and owns no pods; Envoy Gateway reads it while provisioning, the way
-# Helm reads a values file. Referenced by the GatewayClass below.
-apiVersion: gateway.envoyproxy.io/v1alpha1
-kind: EnvoyProxy
-metadata:
-  name: heptapedal
-  namespace: gateway
-  annotations:
-    argocd.argoproj.io/sync-wave: "5"
-    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
-spec:
-  provider:
-    type: Kubernetes
-    kubernetes:
-      envoyService:
-        annotations:
-          # Names the load balancer in the DigitalOcean console, so the 12
-          # USD/month line on the bill is identifiable.
-          #
-          # This config is attached to the GatewayClass, so it applies to every
-          # Gateway of that class — and Envoy Gateway gives each Gateway its own
-          # Envoy fleet and Service by default, so each would also be its own
-          # load balancer, at 12 USD/month, all asking for this same name. A
-          # second Gateway therefore needs either a per-Gateway EnvoyProxy via
-          # Gateway.spec.infrastructure.parametersRef, or mergeGateways to put
-          # them on one fleet.
-          #
-          # None of that is expected: applications attach HTTPRoutes to this
-          # Gateway rather than bringing their own (ADR 0006).
-          service.beta.kubernetes.io/do-loadbalancer-name: heptapedal
-
-          # #14. MCP Streamable HTTP holds long-lived connections, and the
-          # default idle timeout is 60 seconds.
-          #
-          # Probably ineffective, and kept for the cost of one line. Envoy
-          # terminates TLS, so the load balancer carries plain TCP, and
-          # DigitalOcean documents this annotation only for HTTP. DOKS also
-          # provisioned this one as `REGIONAL_NETWORK` — a layer-4 network load
-          # balancer, which has no HTTP layer to time out. #20's end-to-end
-          # test, holding a session open past 60 seconds, is what answers it.
-          # If it drops, the lever is application-side keepalives.
-          service.beta.kubernetes.io/do-loadbalancer-http-idle-timeout-seconds: "600"
-
-      envoyDeployment:
-        # Two, so a node drain during the monthly upgrade window does not take
-        # the only ingress path with it. The control plane is deliberately
-        # non-HA (ADR 0004); that is a different failure domain from the data
-        # plane, which carries live traffic.
-        replicas: 2
-        container:
-          resources:
-            requests:
-              cpu: 50m
-              memory: 96Mi
-            limits:
-              memory: 256Mi
----
-apiVersion: gateway.networking.k8s.io/v1
-kind: GatewayClass
-metadata:
-  name: heptapedal
-  annotations:
-    argocd.argoproj.io/sync-wave: "5"
-    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
-spec:
-  # Which implementation owns this class. Envoy Gateway's own constant — a
-  # mismatch is not an error, it just means no controller claims the class and
-  # the Gateway sits unprocessed.
-  controllerName: gateway.envoyproxy.io/gatewayclass-controller
-
-  # A pointer to the EnvoyProxy config above, named rather than label-matched.
-  # Gateway API is vendor-neutral and so has no field for replica counts,
-  # resource limits or cloud-specific Service annotations; this is where an
-  # implementation's own settings hang off it. Here it applies to every Gateway
-  # of this class — Gateway.spec.infrastructure.parametersRef would override it
-  # for a single one.
-  parametersRef:
-    group: gateway.envoyproxy.io
-    kind: EnvoyProxy
-    name: heptapedal
-    namespace: gateway
----
+# The implementation is DigitalOcean's, backed by Cilium and running before we
+# deploy anything (ADR 0014). Nothing here installs a controller.
+#
+# Wave 4, after the certificate its HTTPS listeners serve.
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
   name: heptapedal
   namespace: gateway
   annotations:
-    argocd.argoproj.io/sync-wave: "5"
-    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "4"
 spec:
-  gatewayClassName: heptapedal
+  # Provided and managed by DOKS. `kubectl get gatewayclass` shows it Accepted
+  # on a fresh cluster.
+  gatewayClassName: cilium
+
+  # Load balancer settings, capped by Gateway API at eight entries.
+  infrastructure:
+    annotations:
+      # Identifies the 12 USD/month line on the bill.
+      service.beta.kubernetes.io/do-loadbalancer-name: heptapedal
+
+      # #14. MCP holds long-lived connections against a 60-second default.
+      # Probably ineffective — the balancer carries TLS-terminated traffic as
+      # plain TCP, and DigitalOcean documents this annotation only for HTTP —
+      # but it costs a line. #20's end-to-end test decides; if sessions drop,
+      # the lever is application-side keepalives.
+      service.beta.kubernetes.io/do-loadbalancer-http-idle-timeout-seconds: "600"
+
   listeners:
     # No hostname: it matches everything, and everything it matches is
     # redirected by the HTTPRoute below.
@@ -135,15 +69,15 @@ spec:
           from: All
 ---
 # Gateway API has no listener-level redirect, so plain HTTP is answered by a
-# route that does nothing but send the client to HTTPS.
+# route that does nothing but send the client to HTTPS. RequestRedirect is Core
+# support, so any conformant implementation provides it.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: https-redirect
   namespace: gateway
   annotations:
-    argocd.argoproj.io/sync-wave: "5"
-    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "4"
 spec:
   parentRefs:
     - name: heptapedal

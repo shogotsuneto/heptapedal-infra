@@ -1,7 +1,13 @@
 # 0005. Route north-south traffic with Gateway API / Envoy Gateway
 
-- **Status:** Accepted
+- **Status:** Accepted; the choice of Envoy Gateway is superseded by
+  [0014](0014-use-the-provider-gateway-implementation.md)
 - **Date:** 2026-08-29
+
+> Moving off the retired ingress controller to Gateway API stands. Implementing
+> it with Envoy Gateway does not: DOKS already ships a Gateway API
+> implementation, which the "Cilium Gateway API" alternative below rejected on
+> reasoning that does not apply.
 
 ## Context
 

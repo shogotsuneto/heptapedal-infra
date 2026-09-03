@@ -42,8 +42,8 @@ controller:
     limits:
       memory: 1Gi
 
-# Renders every manifest, which is the heaviest work Argo CD does here: the
-# Envoy Gateway chart alone carries 2.2 MB of CRDs.
+# Renders every manifest, which is the heaviest work Argo CD does here — charts
+# carrying megabytes of CRDs are routine.
 #
 # 50m was far too little. A CPU request is a share under contention, so the
 # renders starved, health checks began taking seconds, the liveness probe

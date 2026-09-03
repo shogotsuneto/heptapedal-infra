@@ -6,8 +6,8 @@ one root Application; everything here arrives through git
 
 ```
 root/         two child Applications — the only thing the root Application syncs
-platform/     add-ons every cluster gets: cert-manager, Envoy Gateway, Sealed
-              Secrets, Alloy
+platform/     add-ons every cluster gets: Sealed Secrets, cert-manager, the
+              shared Gateway, Alloy
 apps/         one directory per application
 ```
 
@@ -24,7 +24,8 @@ Argo CD assesses an Application's health, so wave 1 does not start until the
 platform Application reports Healthy — not merely until it has been created.
 
 Ordering *within* the platform bundle is the bundle's own business, expressed
-with waves on its members: CRDs, then cert-manager, then Envoy Gateway.
+with waves on its members: namespaces, then Sealed Secrets, then the values it
+decrypts, then cert-manager, then the Gateway.
 
 ## Secrets
 

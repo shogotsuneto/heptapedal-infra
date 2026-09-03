@@ -25,13 +25,3 @@ metadata:
   name: gateway
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
----
-# Envoy Gateway's control plane. Separate from `gateway`, which holds the
-# Gateway itself and the data plane it provisions — so the thing being
-# configured and the thing configuring it are not in one namespace.
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: envoy-gateway-system
-  annotations:
-    argocd.argoproj.io/sync-wave: "-1"
