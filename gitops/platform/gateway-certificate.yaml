@@ -23,7 +23,7 @@ spec:
   # Encrypt counts failures against a limit of five duplicate certificates a
   # week.
   issuerRef:
-    name: letsencrypt-staging
+    name: letsencrypt-production
     kind: ClusterIssuer
 
   commonName: heptapedal.com

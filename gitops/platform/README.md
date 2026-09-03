@@ -69,20 +69,24 @@ Nothing resolves here yet — the apex `A` record is #20.
 DNS-01 needs a token that can write records. **Not the Terraform token** — this
 one lives in the cluster, and gets only what solving a challenge requires.
 
-Everything under `domain`, and nothing else. The **minimum within that is not
-established**: the token in use also carries `domain:update`, so a successful
-issuance does not prove `read`/`create`/`delete` alone would have sufficed.
+```
+domain:read  domain:create  domain:delete
+```
 
-What the solver actually calls is `Domains.CreateRecord`, a list, and
-`Domains.DeleteRecord`. DigitalOcean documents `create` as covering "additive
-actions" within a resource and `delete` as covering actions that remove
-information from it, which points at `read`/`create`/`delete` being enough — but
-that is reading the documentation's analogous examples, not a test.
+**Established, not inferred.** A token without `domain:update` completed a DNS-01
+challenge end to end against `letsencrypt-staging`:
 
-To settle it cheaply, without spending production quota: issue a throwaway
-`Certificate` for some other subdomain against `letsencrypt-staging`, with a
-token that lacks `update`. Staging's limits are generous, and the answer is
-immediate. Until then this is inference.
+```
+DomainVerified  Domain "heptapedal.com" verified with "DNS-01" validation
+Order completed successfully
+```
+
+That covers everything the solver does — `Domains.CreateRecord` to place the
+`_acme-challenge` TXT record, a list to find it, and `Domains.DeleteRecord` to
+remove it. `domain:update` is not needed.
+
+The staging issuer is what made the question cheap to answer: its limits are
+generous, so a real challenge could be run without spending production quota.
 
 Seal it. Note the order: annotate **after** `kubeseal`, or the sync wave lands
 in `spec.template` and applies to the Secret rather than to the `SealedSecret`
