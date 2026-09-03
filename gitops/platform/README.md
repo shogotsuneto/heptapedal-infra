@@ -70,6 +70,30 @@ take the only ingress path with it. The control plane is deliberately non-HA
 ([ADR 0004](../../docs/adr/0004-kubernetes-on-doks.md)); the data plane carries
 live traffic and is a different failure domain.
 
+**The proxies do not live in `gateway`.** Envoy Gateway's default deployment
+model creates the data plane — the Envoy `Deployment` and its `LoadBalancer`
+`Service` — in *its own* namespace, not the `Gateway`'s. So:
+
+```bash
+kubectl -n gateway get gateway heptapedal          # the Gateway, and its address
+kubectl -n envoy-gateway-system get deploy,svc     # the Envoy fleet it provisioned
+```
+
+Two distinct things share the name: **Envoy Gateway** is the controller, one
+Deployment that watches Gateway API resources and creates proxies; **Envoy** is
+the data plane it creates. Unlike ingress-nginx, where the controller and the
+proxy were the same pods, here the controller provisions a fleet per Gateway.
+(Gateway Namespace Mode would place them beside the Gateway instead; the default
+is fine for one Gateway.)
+
+The `GatewayClass` ties the two together. `controllerName` must match Envoy
+Gateway's own constant, `gateway.envoyproxy.io/gatewayclass-controller` — that
+is how an implementation claims a class and ignores others, and a mismatch
+leaves the Gateway silently unprocessed rather than failing. `parametersRef`
+points at the `EnvoyProxy`, which is where anything Gateway API deliberately has
+no field for lives: replica counts, resource limits, cloud-specific Service
+annotations.
+
 Nothing resolves here yet — the apex `A` record pointing at the load balancer is
 #20.
 
