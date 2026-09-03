@@ -166,6 +166,13 @@ pool therefore moves two budgets, not one: the 24 USD/month in
 [ADR 0004](../../docs/adr/0004-kubernetes-on-doks.md) and this allowance. Neither
 ADR noticed it was constraining the other.
 
+**What it already found.** Within an hour of data flowing, two things that were
+invisible before: the operator using twice the CPU and more memory than the
+requests set for it here, and `cilium-agent` using 703 MiB per node against a
+300 MiB request with no limit. The second matters more — it means capacity
+planning by requests understates this cluster by about 800 MiB, which
+[ADR 0004](../../docs/adr/0004-kubernetes-on-doks.md) now records.
+
 **The series count is the part still unknown.** The free tier allows 10k active
 series, and cAdvisor plus kube-state-metrics can approach that even on two
 nodes.
