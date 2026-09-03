@@ -135,30 +135,25 @@ the free tier includes 2,232 and 37,944 per month. Enabling it does start
 metering, which is what the warning in the console means; it does not start
 charging until those are exceeded.
 
-| | measured | allowance | |
+| | projected | allowance | |
 |---|---|---|---|
 | host hours | 1,460 | 2,232 | 65% |
-| container hours, running containers only (38) | 27,740 | 37,944 | 73% |
-| container hours, counting init containers too (53) | 38,690 | 37,944 | **102%** |
+| container hours | 27,156 | 37,944 | 72% |
+| active series | 4,440 | 10,000 | 44% |
+| container hours, once the application lands | 29,346 | 37,944 | 77% |
 
-The projection before deploying said 63%, from 28 containers plus an estimated
-five for Alloy. Alloy actually added ten, and the Kubernetes Overview dashboard
-counts 53 — which is running containers *plus* init containers.
+**Init containers are not billed.** That was the open question, and the answer
+straddled the allowance — 73% counting only running containers, 102% counting
+init containers as well, which the Kubernetes Overview dashboard does.
 
-**Which of those two is billed is not established, and cannot be checked yet.**
-Init containers run for seconds at pod start, so "active container hours"
-plausibly excludes them and 73% is the likely figure — but that is reasoning.
-Grafana Cloud's usage page reports the metered number, and it reads zero for the
-first day or so while aggregation catches up.
+Settled by arithmetic on the metered figures rather than by argument: 5 host
+hours across two nodes is 2.5 hours elapsed, and 93 container hours over 2.5
+hours is 37.2 containers. The cluster runs 38, with 15 init containers beside
+them. 37.2 is the former — a little under, because the Alloy pods started after
+the rest.
 
-The deadline is not arbitrary: this account is on a 14-day trial, during which
-the limits are not the free ones. Nothing constrains anything until it converts,
-so the number has to be read before then rather than discovered afterwards.
-Tracked as #61.
-
-If it is the higher reading, the levers are the same ones that address the
-series count — and dropping a workload is not among them, since the count is of
-containers that exist, not of metrics collected.
+Worth re-reading over a longer window, and again once the application lands, but
+the shape is settled.
 
 **Host hours effectively cap this cluster at two nodes.** A third would reach
 2,190 of 2,232 — 98%, before any margin for a surge upgrade. Growing the node
@@ -166,9 +161,8 @@ pool therefore moves two budgets, not one: the 24 USD/month in
 [ADR 0004](../../docs/adr/0004-kubernetes-on-doks.md) and this allowance. Neither
 ADR noticed it was constraining the other.
 
-**The series count is the part still unknown.** The free tier allows 10k active
-series, and cAdvisor plus kube-state-metrics can approach that even on two
-nodes.
+**The series count has room.** 4,440 of the 10k allowance, against a worry that
+cAdvisor plus kube-state-metrics might approach it. No trimming needed for now.
 
 The lever is `metricsTuning.includeMetrics` / `excludeMetrics`, per source,
 under `clusterMetrics` — and `excludeNamespaces` for logs. These filter at the
