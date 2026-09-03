@@ -23,6 +23,17 @@ spec:
         annotations:
           # Names the load balancer in the DigitalOcean console, so the 12
           # USD/month line on the bill is identifiable.
+          #
+          # This config is attached to the GatewayClass, so it applies to every
+          # Gateway of that class — and Envoy Gateway gives each Gateway its own
+          # Envoy fleet and Service by default, so each would also be its own
+          # load balancer, at 12 USD/month, all asking for this same name. A
+          # second Gateway therefore needs either a per-Gateway EnvoyProxy via
+          # Gateway.spec.infrastructure.parametersRef, or mergeGateways to put
+          # them on one fleet.
+          #
+          # None of that is expected: applications attach HTTPRoutes to this
+          # Gateway rather than bringing their own (ADR 0006).
           service.beta.kubernetes.io/do-loadbalancer-name: heptapedal
 
           # #14. MCP Streamable HTTP holds long-lived connections, and the
