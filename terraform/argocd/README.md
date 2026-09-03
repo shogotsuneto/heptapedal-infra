@@ -105,18 +105,25 @@ should simply stop existing.
 
 Roughly **675m CPU and 1Gi requested** in total.
 
-**The repo-server's probe timeouts are the fix that mattered.** The chart gives
-both probes `timeoutSeconds: 1`, and the liveness probe calls
-`/healthz?full=true`, whose gRPC self-check measurably takes 1.1 to 1.7 seconds
-here. A working repo-server was therefore killed on schedule — exiting 0 through
-a graceful shutdown, so it appeared as `Completed` with a restart count rather
-than as a crash. Each restart drops in-flight manifest generation, which reaches
-the Application as `connection refused` to a port that is simply not listening
-yet, naming neither the probe nor this container.
+**The repo-server's liveness probe is the thing to understand here.** It calls
+`/healthz?full=true`, which opens a *new* TLS gRPC connection to the
+repo-server's own port and calls `Check` — a deadlock detector, from
+[argo-cd#5110](https://github.com/argoproj/argo-cd/issues/5110).
 
-Raising the CPU request from 50m did not fix it, though it was too low on its
-own merits: the check exceeds a one-second budget on an idle node. The probe was
-measuring something slower than its own timeout. The chart's defaults assume a
+It does not run slowly; it blocks. Every failure lasts *exactly* the probe
+timeout, whichever value that is set to, because the dial does not complete
+while a large chart is being rendered on a two-core node. Meanwhile the
+repo-server's internal gRPC health calls return in fractions of a millisecond.
+
+Killing it then empties the manifest cache, so the next attempt renders from
+scratch and blocks again — the probe driving the loop it exists to detect. It
+also surfaces as `connection refused` on the Application, naming neither the
+probe nor this container.
+
+Hence patience rather than a longer timeout: ten failures on a ten-second period
+gives a render a hundred seconds to finish and populate the cache, while a
+genuine deadlock is still caught. Raising the CPU request from 50m was worth
+doing on its own merits but was never the fix. The chart's defaults assume a
 roomier cluster than [ADR 0004](../../docs/adr/0004-kubernetes-on-doks.md) pays
 for, so `values/argocd.yaml` trims:
 
