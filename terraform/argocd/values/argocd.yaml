@@ -55,6 +55,21 @@ controller:
 # limit would reintroduce throttling during exactly the render spikes this is
 # sized for.
 repoServer:
+  # The chart's probes time out after 1 second. The liveness probe calls
+  # /healthz?full=true, which does a gRPC self-check that measurably takes 1.1
+  # to 1.7 seconds here — so a working repo-server gets killed, exits 0 through
+  # a graceful shutdown, and reappears as `Completed` with a restart count
+  # rather than as a crash. Each restart drops in-flight manifest generation,
+  # which surfaces on the Application as `connection refused` to a port that is
+  # simply not listening yet.
+  #
+  # More CPU did not fix it: the check exceeds a one-second budget on an idle
+  # node. The probe was measuring something slower than its own timeout.
+  livenessProbe:
+    timeoutSeconds: 5
+  readinessProbe:
+    timeoutSeconds: 5
+
   resources:
     requests:
       cpu: 300m
