@@ -89,13 +89,17 @@ token.
 The URLs go into `alloy.yaml` — they are endpoints, not secrets. The rest is
 sealed:
 
+The endpoint URLs are already in `alloy.yaml`. The instance IDs go in the secret
+rather than beside them — not because they are sensitive, but because with an
+existing secret this chart reads username *and* password from it and ignores a
+literal `username:` in the values.
+
 ```bash
 kubectl create secret generic grafana-cloud -n monitoring \
   --dry-run=client -o yaml \
-  --from-literal=prometheus-username="$GC_PROM_USER" \
-  --from-literal=prometheus-password="$GC_TOKEN" \
-  --from-literal=loki-username="$GC_LOKI_USER" \
-  --from-literal=loki-password="$GC_TOKEN" \
+  --from-literal=prometheus-username=3558878 \
+  --from-literal=loki-username=1775114 \
+  --from-literal=access-token="$GC_TOKEN" \
   | kubeseal --format yaml \
   | kubectl annotate --local -f - -o yaml \
       argocd.argoproj.io/sync-wave=1 \
@@ -103,10 +107,21 @@ kubectl create secret generic grafana-cloud -n monitoring \
   > gitops/platform/grafana-cloud.sealed.yaml
 ```
 
-One token serves both endpoints. The wizard's token carries the scope set
-`set:alloy-data-write`; a hand-made policy needs the equivalent write scopes for
-metrics and logs. If the scopes are wrong the failure is visible in the Alloy
-logs rather than anywhere in Grafana Cloud.
+One token serves both endpoints.
+
+**Not the wizard's token.** The Kubernetes Monitoring wizard configures Fleet
+Management, so what it mints is a fleet-management credential and it emits no
+destinations at all — which is why it shows a single user ID that belongs to
+neither Prometheus nor Loki. Create an access policy token with write scopes for
+metrics and logs instead: Cloud Portal → Access Policies.
+
+If the scopes are wrong the failure appears in the Alloy logs and nowhere in
+Grafana Cloud.
+
+The chart also renders `ca_pem`, `cert_pem` and `key_pem` reading `ca`, `cert`
+and `key` from this secret. Leaving them out is correct and is what the chart's
+own external-secrets example does: a missing key reads as empty, and Alloy
+treats empty TLS fields as unset.
 
 **What it costs.** 375m CPU and 576Mi requested across five components: the
 Alloy DaemonSet for logs, a StatefulSet for metrics, a singleton for events,

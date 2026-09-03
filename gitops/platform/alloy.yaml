@@ -25,28 +25,32 @@ spec:
         cluster:
           name: heptapedal
 
-        # Endpoints, not secrets — the credentials come from the Secret below.
-        # Both are specific to the Grafana Cloud stack; read them off its
-        # details page.
+        # Endpoints are per-stack identifiers, not secrets, so they live here.
+        #
+        # The instance IDs do not, even though they are equally public: with an
+        # existing secret this chart reads username *and* password from it, and
+        # a literal `username:` in these values is ignored. Prometheus and Loki
+        # have different IDs, so they need different keys in the one secret.
+        # Shape follows the chart's own external-secrets example.
         destinations:
           grafana-cloud-metrics:
             type: prometheus
-            url: https://prometheus-prod-56-prod-us-east-2.grafana.net/api/prom/push
+            url: https://prometheus-prod-32-prod-ca-east-0.grafana.net/api/prom/push
             auth:
               type: basic
               usernameKey: prometheus-username
-              passwordKey: prometheus-password
+              passwordKey: access-token
             secret:
               create: false
               name: grafana-cloud
               namespace: monitoring
           grafana-cloud-logs:
             type: loki
-            url: https://logs-prod-036.grafana.net/loki/api/v1/push
+            url: https://logs-prod-018.grafana.net/loki/api/v1/push
             auth:
               type: basic
               usernameKey: loki-username
-              passwordKey: loki-password
+              passwordKey: access-token
             secret:
               create: false
               name: grafana-cloud
