@@ -3,20 +3,20 @@
 Add-ons every cluster gets, each an Argo CD `Application` ordered by
 `argocd.argoproj.io/sync-wave`.
 
-| Wave | Contents | Status |
-|---|---|---|
-| -1 | namespaces the bundle installs into | in |
-| 0 | Sealed Secrets controller | in |
-| 1 | every `SealedSecret` this bundle needs | with each add-on |
-| 2 | cert-manager; Grafana Alloy | in |
-| 3 | `ClusterIssuer`s and the wildcard `Certificate` | in |
-| 4 | the shared `Gateway` and the HTTPS redirect | in |
+| Wave | Contents                                        | Status           |
+| ---- | ----------------------------------------------- | ---------------- |
+| -1   | namespaces the bundle installs into             | in               |
+| 0    | Sealed Secrets controller                       | in               |
+| 1    | every `SealedSecret` this bundle needs          | with each add-on |
+| 2    | cert-manager; Grafana Alloy                     | in               |
+| 3    | `ClusterIssuer`s and the wildcard `Certificate` | in               |
+| 4    | the shared `Gateway` and the HTTPS redirect     | in               |
 
 The waves follow real dependencies, not tidiness:
 
 - **Namespaces before anything that goes in one.** Declared rather than left to
   each Application's `CreateNamespace=true`, which creates the namespace during
-  *that* Application's sync — too late for a resource scheduled earlier. A
+  _that_ Application's sync — too late for a resource scheduled earlier. A
   namespace is a dependency like any other.
 - **Controller first**, because a `SealedSecret` cannot be decrypted before it
   runs, and its CRD has to exist to be applied at all.
@@ -91,7 +91,7 @@ sealed:
 
 The endpoint URLs are already in `alloy.yaml`. The instance IDs go in the secret
 rather than beside them — not because they are sensitive, but because with an
-existing secret this chart reads username *and* password from it and ignores a
+existing secret this chart reads username _and_ password from it and ignores a
 literal `username:` in the values.
 
 ```bash
@@ -135,12 +135,12 @@ the free tier includes 2,232 and 37,944 per month. Enabling it does start
 metering, which is what the warning in the console means; it does not start
 charging until those are exceeded.
 
-| | projected | allowance | |
-|---|---|---|---|
-| host hours | 1,460 | 2,232 | 65% |
-| container hours | 27,156 | 37,944 | 72% |
-| active series | 4,440 | 10,000 | 44% |
-| container hours, once the application lands | 29,346 | 37,944 | 77% |
+|                                             | projected | allowance |     |
+| ------------------------------------------- | --------- | --------- | --- |
+| host hours                                  | 1,460     | 2,232     | 65% |
+| container hours                             | 27,156    | 37,944    | 72% |
+| active series                               | 4,440     | 10,000    | 44% |
+| container hours, once the application lands | 29,346    | 37,944    | 77% |
 
 **Init containers are not billed.** That was the open question, and the answer
 straddled the allowance — 73% counting only running containers, 102% counting
@@ -239,8 +239,8 @@ Commit that file. The name and namespace are part of what is sealed, so
 reference.
 
 **Why `cert-manager` and not the issuer's namespace** — a `ClusterIssuer` has no
-namespace, so cert-manager reads solver credentials from its *cluster resource
-namespace*. Two values are in play and they disagree: the binary defaults
+namespace, so cert-manager reads solver credentials from its _cluster resource
+namespace_. Two values are in play and they disagree: the binary defaults
 `--cluster-resource-namespace` to `kube-system`, while the chart passes
 `--cluster-resource-namespace=$(POD_NAMESPACE)`, which resolves to wherever
 cert-manager is installed. Reading only the source would put this Secret in the
