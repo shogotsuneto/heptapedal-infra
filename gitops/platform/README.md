@@ -106,10 +106,28 @@ kube-state-metrics, and the Alloy operator. The chart sets requests on only two
 of those, so the rest are set here — without them they would be BestEffort and
 first to be evicted under memory pressure.
 
-**Watch the series count.** The free tier allows 10k active series, and
-cAdvisor plus kube-state-metrics can approach that even on two nodes. If it is
-exceeded, the chart's metric allow-lists are the lever. Worth checking in
-Grafana Cloud once data starts arriving rather than guessing now.
+**It is free, and the margin is measurable.** Grafana Cloud bills Kubernetes
+Monitoring as its own dimension — active host hours and container hours — and
+the free tier includes 2,232 and 37,944 per month. Enabling it does start
+metering, which is what the warning in the console means; it does not start
+charging until those are exceeded.
+
+| | projected | allowance | |
+|---|---|---|---|
+| host hours | 1,460 | 2,232 | 65% |
+| container hours, with Alloy | 24,090 | 37,944 | 63% |
+| container hours, once the application lands | 26,280 | 37,944 | 69% |
+
+**Host hours effectively cap this cluster at two nodes.** A third would reach
+2,190 of 2,232 — 98%, before any margin for a surge upgrade. Growing the node
+pool therefore moves two budgets, not one: the 24 USD/month in
+[ADR 0004](../../docs/adr/0004-kubernetes-on-doks.md) and this allowance. Neither
+ADR noticed it was constraining the other.
+
+**The series count is the part still unknown.** The free tier allows 10k active
+series, and cAdvisor plus kube-state-metrics can approach that even on two
+nodes. The chart's metric allow-lists are the lever if it goes over — worth
+checking once data arrives rather than trimming pre-emptively.
 
 ## cert-manager
 
