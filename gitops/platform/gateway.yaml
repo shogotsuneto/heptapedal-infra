@@ -39,13 +39,13 @@ spec:
           # #14. MCP Streamable HTTP holds long-lived connections, and the
           # default idle timeout is 60 seconds.
           #
-          # Whether this reaches them is NOT established. Envoy terminates TLS,
-          # so the load balancer's protocol is `tcp` — its default — and
-          # DigitalOcean documents this annotation only in an HTTP context. It
-          # is set because it is free and may apply; #20's end-to-end test,
-          # holding a session open past 60 seconds, is what will actually
-          # answer it. If it does not, the lever is keepalives from the
-          # application side rather than a larger number here.
+          # Probably ineffective, and kept for the cost of one line. Envoy
+          # terminates TLS, so the load balancer carries plain TCP, and
+          # DigitalOcean documents this annotation only for HTTP. DOKS also
+          # provisioned this one as `REGIONAL_NETWORK` — a layer-4 network load
+          # balancer, which has no HTTP layer to time out. #20's end-to-end
+          # test, holding a session open past 60 seconds, is what answers it.
+          # If it drops, the lever is application-side keepalives.
           service.beta.kubernetes.io/do-loadbalancer-http-idle-timeout-seconds: "600"
 
       envoyDeployment:
