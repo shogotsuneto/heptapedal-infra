@@ -68,10 +68,18 @@ Alloy ships metrics, logs and Kubernetes events to Grafana Cloud
 stored in the cluster, so dashboards and history survive a rebuild — which is
 also why there is no metrics-server here and `kubectl top` does not work.
 
-**Its credentials.** Grafana Cloud → the stack's details page gives, for each of
-Prometheus and Loki, a numeric user and an endpoint URL; the password is one
-access policy token with `metrics:write` and `logs:write`. The URLs live in
-`alloy.yaml` — they are endpoints, not secrets. The rest is sealed:
+**Getting the credentials.** Activate the Kubernetes Monitoring app in Grafana
+Cloud, then run its configuration wizard — but do not apply what it generates.
+This repository already has the Application; the wizard is only the reliable way
+to read off the right values, since it emits a `k8s-monitoring` configuration
+containing your stack's endpoints and instance IDs and mints a token for them.
+
+Activation matters on its own: it is what installs the Kubernetes dashboards,
+which is most of why this chart was chosen over a hand-written Alloy config.
+
+Take from it the two endpoint URLs, the two numeric usernames, and the token.
+The URLs go into `alloy.yaml` — they are endpoints, not secrets. The rest is
+sealed:
 
 ```bash
 kubectl create secret generic grafana-cloud -n monitoring \
@@ -86,6 +94,11 @@ kubectl create secret generic grafana-cloud -n monitoring \
       argocd.argoproj.io/sync-options=SkipDryRunOnMissingResource=true \
   > gitops/platform/grafana-cloud.sealed.yaml
 ```
+
+One token serves both endpoints. The wizard's token carries the scope set
+`set:alloy-data-write`; a hand-made policy needs the equivalent write scopes for
+metrics and logs. If the scopes are wrong the failure is visible in the Alloy
+logs rather than anywhere in Grafana Cloud.
 
 **What it costs.** 375m CPU and 576Mi requested across five components: the
 Alloy DaemonSet for logs, a StatefulSet for metrics, a singleton for events,
