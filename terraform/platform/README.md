@@ -262,6 +262,55 @@ Deliberately not carried across:
 | `www` → `parkingpage.namecheap.com` | the same parking page |
 | `NS`, `SOA` | belong to whoever hosts the zone; DigitalOcean creates its own |
 
+## The Droplet limit is the real capacity constraint
+
+The account allows **3 Droplets**. The cluster runs 2, so there is exactly one
+spare — and three separate things want it.
+
+**Surge upgrades want it, unattended.** `auto_upgrade` and `surge_upgrade` are
+both on. DigitalOcean provisions replacements before draining, and asks for a
+Droplet limit of at least `n + min(10, num_nodes)`
+([upgrade docs](https://docs.digitalocean.com/products/kubernetes/how-to/upgrade-cluster/)).
+At 2 nodes that is **4**, and we have 3, so upgrades already fall back to a
+partial surge and finish node-by-node. That is a degraded mode, not a failure —
+worth knowing before it is mistaken for one.
+
+**Draining wants it.** Cordon and drain need somewhere for the evicted Pods to
+land. With 2 nodes and no spare, draining one means the other absorbs
+everything.
+
+**Resizing wants it twice over,** because a node's size cannot be changed in
+place. DigitalOcean's procedure is to stand up a new pool and delete the old
+([support note](https://docs.digitalocean.com/support/can-i-resize-a-doks-node/)),
+which is 2 + 2 = 4 Droplets against a limit of 3.
+
+### Growing the cluster is not the cheap direction
+
+Three nodes would leave zero spare, disabling surge entirely (3 nodes wants a
+limit of 6) and removing the room to drain. Larger nodes are also the better
+value — a 4 GB node yields 3003 MiB allocatable, so roughly a quarter is gone
+to reserve before any workload, and that overhead is per-node.
+
+But sizing up is currently expensive in a different way, which a plan confirms
+rather than predicts:
+
+```
+# digitalocean_kubernetes_cluster.heptapedal must be replaced
+      ~ size = "s-2vcpu-4gb" -> "s-2vcpu-8gb" # forces replacement
+```
+
+The node pool is declared inline in `digitalocean_kubernetes_cluster`, so its
+`size` is part of the cluster's identity. **Changing it destroys the cluster and
+everything Argo CD has put in it.** Declaring workloads in a separate
+`digitalocean_kubernetes_node_pool` would make size a pool-level change instead.
+
+### So: raise the limit first
+
+Everything above is a workaround for a number that can simply be increased, at
+no cost, from the DigitalOcean console. **4 restores full surge upgrades at the
+current size; 6 makes both resizing and a third node possible.** Until then,
+2 nodes is not a preference, it is the only sustainable count.
+
 ## Operational notes
 
 ### Changes that cost money
