@@ -24,8 +24,8 @@ resource "digitalocean_vpc" "heptapedal" {
   description = "Private network for the heptapedal platform."
 }
 
-# Pin the minor, take the newest patch within it. auto_upgrade then applies
-# later patches during the maintenance window, so this does not drift.
+# Pin the minor and take the newest patch within it — but only when the cluster
+# is built. After that DigitalOcean owns the version; see `lifecycle` below.
 data "digitalocean_kubernetes_versions" "pinned" {
   version_prefix = var.kubernetes_version_prefix
 }
@@ -42,9 +42,11 @@ resource "digitalocean_kubernetes_cluster" "heptapedal" {
   # is also irreversible: DigitalOcean cannot disable HA once a cluster has it.
   ha = false
 
-  # Patch upgrades, applied in the window below. Surge upgrades add a temporary
-  # node during the roll so pods are not evicted onto a cluster that has no room
-  # for them — with two 4 GB nodes there is not much slack to absorb a drain.
+  # Patch upgrades, applied in the window below. surge_upgrade asks for
+  # replacements to be stood up before draining, which wants a Droplet limit of
+  # n + min(10, num_nodes) — 4 at two nodes, against an account limit of 3. So
+  # it currently degrades to a partial surge and finishes node-by-node. That is
+  # a documented fallback, not a failure; see README, "The Droplet limit".
   auto_upgrade  = true
   surge_upgrade = true
 
@@ -68,4 +70,20 @@ resource "digitalocean_kubernetes_cluster" "heptapedal" {
   }
 
   tags = ["heptapedal", "terraform"]
+
+  # DigitalOcean owns the version once the cluster exists, because auto_upgrade
+  # is on. Without this, the data source above resolves to a new patch the
+  # moment one is published while the cluster stays on the old one until its
+  # maintenance window — so every plan in between carries a version diff, and
+  # any merge that reaches `apply` converts that diff into an unscheduled
+  # upgrade that recycles every node. The workflow watches `terraform/**`, so a
+  # README edit is enough to set it off.
+  #
+  # The cost is that a *minor* bump is ignored too: changing
+  # kubernetes_version_prefix means removing this line, applying, and putting it
+  # back. That is the right amount of friction for a once-a-year change, and the
+  # wrong amount for a patch nobody chose.
+  lifecycle {
+    ignore_changes = [version]
+  }
 }
