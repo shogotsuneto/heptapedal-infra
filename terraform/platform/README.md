@@ -362,6 +362,38 @@ dig +short heptapedal.com A
 
 Two different answers, and the fix is one variable.
 
+## Supabase's Site URL is a deployment setting
+
+Delivering the sign-up email is only half of it. **Where its link points is a
+Supabase setting, not an application one**, and it defaults to
+`http://localhost:3000` — so a working deployment can still email confirmation
+links that go nowhere:
+
+```
+http://localhost:3000/set-password?token_hash=…&type=signup
+```
+
+Fix it at **Supabase → Authentication → URL Configuration → Site URL**, set to
+`https://heptapedal.com`.
+
+The reason it is Supabase's to decide is that the application asks GoTrue for
+the email without saying where the link should land — `POST /auth/v1/otp` with
+`{email, create_user: true}` and no `redirect_to`. GoTrue then falls back to the
+project's Site URL, whose default is a local development server.
+
+Nothing in this repository can set it, and nothing here will notice it is wrong:
+sign-up returns success either way, because the failure is in an email nobody
+here reads. Worth checking after any change to the Supabase project, and worth
+knowing as the first suspect when accounts cannot be created on a deployment
+that otherwise looks healthy.
+
+**One project serves both local development and production**, so pointing Site
+URL at production means locally-triggered sign-up emails link to production too.
+Passing an explicit `redirect_to` per environment is the durable fix and belongs
+to the application ([heptapedal#72](https://github.com/shogotsuneto/heptapedal/issues/72)); until then this
+setting is a choice about which environment gets working links, and production
+is the one that has users.
+
 ## Operational notes
 
 ### Changes that cost money
