@@ -81,6 +81,7 @@ Two rules carry over from the ADR:
 | `platform/grafana-cloud.sealed.yaml` | `monitoring` / `grafana-cloud` | Grafana Cloud's Kubernetes Monitoring configuration wizard, which emits both instance IDs and mints the token — see [platform/README](platform/README.md#telemetry) |
 | `platform/ghcr-registry.sealed.yaml` | `argocd` / `ghcr-charts` | GitHub → Settings → Developer settings → Tokens (classic), `read:packages` — see [platform/README](platform/README.md#the-ghcr-registry-credential) |
 | `apps/heptapedal/app-secrets.sealed.yaml` | `hepta` / `app-secrets` | `DATABASE_URL` from `tofu -chdir=terraform/platform output -raw database_url`; the Supabase values from the Supabase console — see [apps/README](apps/README.md#sealing-it) |
+| `apps/heptapedal/ghcr.sealed.yaml` | `hepta` / `ghcr` | The same classic PAT as the registry credential above — second copy, for the nodes rather than for rendering; see [apps/README](apps/README.md#the-pull-credential) |
 
 Every `SealedSecret` committed here gets a row. A row without a recoverable
 source is the invariant being broken.

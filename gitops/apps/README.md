@@ -25,11 +25,17 @@ is buying.
 
 ## heptapedal
 
-| | |
+| Wave | What |
 |---|---|
-| Namespace | `hepta`, declared at wave -1 in `namespace.yaml` |
-| Secret | `app-secrets`, wave 0 |
-| Application | wave 1, added by #18 |
+| -1 | `hepta` namespace |
+| 0 | `app-secrets`, and the `ghcr` pull credential |
+| 1 | `heptapedal-embeddings` — the app reaches it at `embeddings.hepta.svc:80` |
+| 2 | `heptapedal-app` |
+
+Both Applications pin `0.2.0`, an immutable chart version rather than a moving
+tag ([ADR 0011](../../docs/adr/0011-artifact-distribution-ghcr.md)). The
+published charts already point `image.repository`/`tag` at GHCR, so the values
+here do not restate them.
 
 ### Why the Secret's wave is not merely tidy
 
@@ -68,6 +74,37 @@ kubectl create secret generic app-secrets -n hepta \
 `database_url` is already `app_user` over the VPC's private host with
 `sslmode=require`; the database firewall trusts the cluster by UUID, so nothing
 further is needed to reach it.
+
+### The pull credential
+
+Both images are private packages, so every pod spec needs a credential —
+including the migration Job's, which is the one that fails confusingly
+(see above). It is wave 0 for the same reason `app-secrets` is: PreSync pulls
+an image before this Application's resources exist.
+
+This is the second sealed copy of the GHCR token, the first being the one Argo
+CD renders charts with ([platform/README](../platform/README.md#the-ghcr-registry-credential)).
+Same classic PAT; a rotation touches both.
+
+```bash
+kubectl create secret docker-registry ghcr -n hepta \
+  --dry-run=client -o yaml \
+  --docker-server=ghcr.io \
+  --docker-username=shogotsuneto \
+  --docker-password="$GHCR_TOKEN" \
+  | kubeseal --format yaml \
+  | kubectl annotate --local -f - -o yaml \
+      argocd.argoproj.io/sync-wave=0 \
+      argocd.argoproj.io/sync-options=SkipDryRunOnMissingResource=true \
+  > gitops/apps/heptapedal/ghcr.sealed.yaml
+```
+
+Check that the type survived — a `docker-registry` Secret is only usable as one
+if it keeps its type, and kubeseal carries that in `spec.template`:
+
+```bash
+grep 'type:' gitops/apps/heptapedal/ghcr.sealed.yaml   # kubernetes.io/dockerconfigjson
+```
 
 ### On the database password specifically
 
