@@ -1,0 +1,67 @@
+# The application itself: Leptos SSR + /api + /mcp. Wave 2, after the embeddings
+# service it talks to.
+#
+# Its migration Job is a Helm hook, so Argo CD runs it as PreSync — before this
+# Application's own resources exist. Everything it reads therefore has to be on
+# the cluster already: app-secrets and the ghcr pull credential are both wave 0
+# in this bundle, two waves ahead. See ../README.md.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: heptapedal-app
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: ghcr.io/shogotsuneto/charts
+    chart: heptapedal-app
+    targetRevision: 0.2.0
+    helm:
+      valuesObject:
+        imagePullSecrets:
+          - name: ghcr
+
+        # Served over HTTPS here, unlike the local http Kind stack, so the
+        # session cookie can be marked Secure.
+        cookieSecure: true
+
+        # The two routing surfaces are independent switches, not either/or.
+        # This cluster has no Ingress controller — ingress-nginx reached end of
+        # life in March 2026 — so the Ingress goes off and the HTTPRoute on.
+        ingress:
+          enabled: false
+
+        # Attaches to the shared Gateway; it does not create one. TLS is
+        # terminated there by cert-manager, which is why no certificate appears
+        # in this chart. sectionName picks the apex listener, whose hostname
+        # already matches the one below.
+        httpRoute:
+          enabled: true
+          parentRefs:
+            - name: heptapedal
+              namespace: gateway
+              sectionName: https-apex
+          hostnames:
+            - heptapedal.com
+
+        # The chart ships requests only. A limit is provisional rather than
+        # measured — generous enough not to OOMKill an SSR server, tight enough
+        # that a leak cannot take the node down with it. Revisit against
+        # Grafana once there is traffic (#23).
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            memory: 512Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: hepta
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

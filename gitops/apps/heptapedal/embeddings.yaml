@@ -1,0 +1,49 @@
+# Text Embeddings Inference, in-cluster. The app reaches it at
+# embeddings.hepta.svc:80, so it comes up first — wave 1, ahead of the app.
+#
+# The published chart already points image.repository/tag at GHCR (the publish
+# workflow rewrites the local-dev defaults), so nothing here restates them.
+# Pinned to an immutable 0.2.0 rather than a moving tag (ADR 0011).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: heptapedal-embeddings
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: ghcr.io/shogotsuneto/charts
+    chart: heptapedal-embeddings
+    targetRevision: 0.2.0
+    helm:
+      valuesObject:
+        # Both images are private packages (ADR 0011), so every pod spec needs
+        # this. The Secret is sealed alongside the application's own.
+        imagePullSecrets:
+          - name: ghcr
+
+        # The chart ships requests only, and says why: under emulation a hard
+        # limit OOMKills TEI at model load. These nodes are amd64, so the
+        # chart's own production guidance applies and the pod gets a ceiling
+        # rather than being left unbounded.
+        #
+        # 1Gi of requests fits on exactly one of the two nodes — see #67. The
+        # limit is a ceiling, not a reservation, but if TEI actually approaches
+        # it that node has little left, so measure before trusting it.
+        resources:
+          requests:
+            cpu: 250m
+            memory: 1Gi
+          limits:
+            memory: 2Gi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: hepta
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
