@@ -80,6 +80,7 @@ Two rules carry over from the ADR:
 | `platform/cert-manager-do-token.sealed.yaml` | `cert-manager` / `digitalocean-dns` | DigitalOcean → API → Tokens. Scoped to `domain:read`, `domain:create`, `domain:delete` — see [platform/README](platform/README.md#its-digitalocean-token) |
 | `platform/grafana-cloud.sealed.yaml` | `monitoring` / `grafana-cloud` | Grafana Cloud's Kubernetes Monitoring configuration wizard, which emits both instance IDs and mints the token — see [platform/README](platform/README.md#telemetry) |
 | `platform/ghcr-registry.sealed.yaml` | `argocd` / `ghcr-charts` | GitHub → Settings → Developer settings → Tokens (classic), `read:packages` — see [platform/README](platform/README.md#the-ghcr-registry-credential) |
+| `apps/heptapedal/app-secrets.sealed.yaml` | `hepta` / `app-secrets` | `DATABASE_URL` from `tofu -chdir=terraform/platform output -raw database_url`; the Supabase values from the Supabase console — see [apps/README](apps/README.md#sealing-it) |
 
 Every `SealedSecret` committed here gets a row. A row without a recoverable
 source is the invariant being broken.
