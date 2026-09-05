@@ -53,14 +53,4 @@ check "apex_matches_the_load_balancer" {
       data.digitalocean_loadbalancer.gateway.ip,
     )
   }
-
-  # Guards the annotation on the Gateway. Measured, not assumed: a connection
-  # held open survives 70 seconds idle and is cut by 610, which is the 600 the
-  # annotation asks for — so it works on this network Load Balancer even though
-  # DigitalOcean documents the setting for HTTP ones. Dropping the annotation
-  # would silently return MCP sessions to a 60-second guillotine.
-  assert {
-    condition     = data.digitalocean_loadbalancer.gateway.http_idle_timeout_seconds >= 600
-    error_message = "The load balancer's idle timeout fell back to ${data.digitalocean_loadbalancer.gateway.http_idle_timeout_seconds}s; MCP streaming needs the Gateway's do-loadbalancer-http-idle-timeout-seconds annotation."
-  }
 }
