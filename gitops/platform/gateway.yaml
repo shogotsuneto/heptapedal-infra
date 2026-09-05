@@ -24,12 +24,17 @@ spec:
       # Identifies the 12 USD/month line on the bill.
       service.beta.kubernetes.io/do-loadbalancer-name: heptapedal
 
-      # #14. MCP holds long-lived connections against a 60-second default.
-      # Probably ineffective — the balancer carries TLS-terminated traffic as
-      # plain TCP, and DigitalOcean documents this annotation only for HTTP —
-      # but it costs a line. #20's end-to-end test decides; if sessions drop,
-      # the lever is application-side keepalives.
-      service.beta.kubernetes.io/do-loadbalancer-http-idle-timeout-seconds: "600"
+      # #14 asked for an idle-timeout annotation here. Removed, because it was
+      # measured and it does nothing: DigitalOcean gives this Gateway a
+      # REGIONAL_NETWORK balancer whose forwarding rules are `tcp 443 -> tcp
+      # 443`, so there is no HTTP layer to hold an HTTP idle timeout, and the
+      # API keeps reporting 60 however the annotation is set. The suspicion the
+      # old comment recorded was correct.
+      #
+      # What the balancer does instead, measured by holding a connection open:
+      # it survives 70 seconds idle and is cut by 310. That timeout is not
+      # ours to configure, so an MCP session that goes quiet will be dropped
+      # and application-side keepalives are the only lever. See #14.
 
   listeners:
     # No hostname: it matches everything, and everything it matches is
