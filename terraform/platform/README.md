@@ -313,6 +313,45 @@ no cost, from the DigitalOcean console. **4 restores full surge upgrades at the
 current size; 6 makes both resizing and a third node possible.** Until then,
 2 nodes is not a preference, it is the only sustainable count.
 
+## Withdrawing or repointing heptapedal.com
+
+The apex A record is a variable, not a lookup, because writing it consults
+nothing: DigitalOcean stores the address it is given. What sits at that address
+is the Gateway's Load Balancer, created downstream by Argo CD — so the *value*
+comes from GitOps even though the record does not depend on it.
+
+That leaves one hazard, which the `check` block in `dns-apex.tf` covers:
+Terraform compares configuration to state, never to reality, so a stale
+`apex_ip` produces **no diff at all** while the site is unreachable.
+
+On a rebuild the address changes and there is no way to pin it — reserved IPs
+cannot attach to DigitalOcean Load Balancers, and `do-loadbalancer-ip` takes a
+BYOIP prefix, which is a different product. So:
+
+```bash
+# Withdraw the record while the cluster is being rebuilt.
+tofu apply -var apex_record=false
+
+# Republish once the Gateway has an address again.
+kubectl get gateway heptapedal -n gateway -o jsonpath='{.status.addresses[0].value}'
+# then set apex_ip in variables.tf and apply
+```
+
+Withdrawing beats parking it on an address that answers nothing: clients get
+NXDOMAIN and fail immediately rather than hanging. Certificate renewal is
+unaffected — cert-manager solves DNS-01 with TXT records and never reads this
+one.
+
+The record's TTL is 300s rather than the usual 1800 for the same reason: it is
+expected to change, and a short TTL means minutes rather than half an hour
+without having to remember to lower it beforehand.
+
+### The check needs one token scope
+
+`load_balancer:read`. Without it the data source 403s and **every plan carries a
+warning**, which is worse than no check — either grant the scope or delete the
+block.
+
 ## Operational notes
 
 ### Changes that cost money

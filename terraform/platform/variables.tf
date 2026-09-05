@@ -104,3 +104,30 @@ variable "maintenance_window" {
     start_time = "10:00"
   }
 }
+
+variable "apex_record" {
+  description = <<-EOT
+    Whether to publish the apex A record at all. Set false to withdraw
+    heptapedal.com during a rebuild — better than parking it on an address that
+    answers nothing, since clients then fail immediately instead of hanging.
+  EOT
+  type        = bool
+  default     = true
+}
+
+variable "apex_ip" {
+  description = <<-EOT
+    Where heptapedal.com points. This is the Gateway's Load Balancer address,
+    which DigitalOcean assigns when Argo CD reconciles the Gateway — so on a
+    rebuilt cluster it changes and this has to change with it. The check block
+    in dns-apex.tf warns when the two disagree.
+  EOT
+  type        = string
+  default     = "24.199.71.41"
+}
+
+variable "apex_ttl" {
+  description = "Seconds. Short, because this record is expected to change."
+  type        = number
+  default     = 300
+}
