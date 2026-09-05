@@ -1,0 +1,16 @@
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "0"
+  name: ghcr
+  namespace: hepta
+spec:
+  encryptedData:
+    .dockerconfigjson: AgANrT9i16T44XkgkXiEGDSS9hu+9ITVuTRpJ1PVxWoNDXTlMXWuettHnssavWyvIWWsGCy8bd52Sg7fFY/tfkHDsu7BSJp0y1AWXjwRcrU72doySQ456sx2XtqE65K4pEvp2JW95BMPnBtHP5P3xwBm5KcItUlTHDvjUm95hz+Fx5GM40SIFJKxSSgEEVyPTw/MVSDDrQNvWUO875ggNOW2hCBhmbktZ/gWJNiQx9d4m5y7UPpj5MieSfyhZ2Ea0yz1Kg99ZWTjUA+XR3UzogTa7Big9yzOKdu8S0kPum9Tyk9PcqA5l4fGjXqab+glTdZP34ozvJSaxrlCHt7gHQZYs6rshF9IoZ1hPGxwV/y7tOVwsgG3X5j82uovoBSo/6iWyZ0N3jreuBwGky2RJt5ccW1VRqNrHvZigKn5MeZIF+GkDNx/Y+lVjToStBWMzlKV+BeRDe66tAzJ/AFV0cAKD8OZ0ItFQ7O3/Z1gtWXA1jTHmDU4bxldP5i1LlAmlik2CZXSepHbruMqnAJdb0SCHN77V+Jy4lnrqag3K6pBm1F7EgkRQw01ZjHr6jJu/Yubr8dhzg5O3rxc6IKma4VxFYhsDyfwNJ3GedvzvPa3QP/kYhjTtyqQPeXKUKdQPxtQIsPtVwburmmyQlJiJA9MUPzAsdUwcQQNl3GgDtwFn5xm89qnnqPV6rFRdsF6dNhoFV5ne/5Q2lCA6dWaRocpOayVvJiTOytF2spQP5Xv/zp25v4+wV3VylpTgOuVcrNzoSud/lrJrjW2rlGHPygOEl237Zk5GLtZGAhWg9X9ydkc7XsHCX1t3yVd1gJHk8JMJykdaVHDMsGREZlbkPzjEhcAuuyD0L4Sya5l1v6pBNtmDZLiE42zOW4fp39lBBfSDXOzc6YTJOsXFJ9wsf1PZTgy0szPSLoCBBB2MOw0NZr66DkgoLh1Vw==
+  template:
+    metadata:
+      name: ghcr
+      namespace: hepta
+    type: kubernetes.io/dockerconfigjson
