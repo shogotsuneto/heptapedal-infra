@@ -1,0 +1,12 @@
+# Where the application runs. Declared here rather than left to the
+# Application's `CreateNamespace=true`, for the same reason as the platform
+# bundle: that option creates the namespace during *that* Application's sync,
+# which is too late for the SealedSecret scheduled ahead of it.
+#
+# Wave -1, so it exists before anything is sealed into it.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hepta
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
