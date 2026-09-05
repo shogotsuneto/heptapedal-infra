@@ -28,20 +28,14 @@ Run approximately once, by hand, before anything else.
    database:view_credentials
    domain:create      domain:read      domain:update      domain:delete
    tag:create         tag:read         tag:delete
-   load_balancer:read
    ```
 
    The two easy to miss are `kubernetes:access_cluster` (retrieves the
    kubeconfig) and `database:view_credentials` (retrieves the connection URI);
    without them the platform stack cannot produce its outputs.
 
-   `droplet:*` is **not** needed — DOKS creates nodes with its own credentials —
-   and neither is any `load_balancer` scope beyond **read**. Nothing here
-   *manages* a Load Balancer; the read is for the `check` block in
-   `../platform/dns-apex.tf`, which compares the apex A record against the
-   address the Gateway's Load Balancer actually has. Omit it and every plan
-   carries a warning. It is a read scope, so the pull-request `plan` environment
-   gets it too.
+   `load_balancer:*` and `droplet:*` are **not** needed — DOKS creates both with
+   its own credentials.
 
    cert-manager gets its **own, separate** token later — `domain:read`,
    `domain:create`, `domain:delete` — because a token living in the cluster

@@ -119,8 +119,8 @@ variable "apex_ip" {
   description = <<-EOT
     Where heptapedal.com points. This is the Gateway's Load Balancer address,
     which DigitalOcean assigns when Argo CD reconciles the Gateway — so on a
-    rebuilt cluster it changes and this has to change with it. The check block
-    in dns-apex.tf warns when the two disagree.
+    rebuilt cluster it changes and this has to change with it. Nothing warns
+    when it goes stale — see dns-apex.tf.
   EOT
   type        = string
   default     = "24.199.71.41"

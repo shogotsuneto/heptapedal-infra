@@ -7,8 +7,25 @@
 # origin sits downstream, in GitOps: the Load Balancer, and therefore its
 # address, are created when Argo CD reconciles the Gateway.
 #
-# So there is no ordering problem to solve, only a fact to keep true. The check
-# block below is what keeps it honest.
+# So there is no ordering problem to solve, only a fact to keep true — and
+# nothing here enforces it. Terraform compares configuration against state,
+# never against reality, so a stale `apex_ip` produces no diff at all: the
+# record matches what was asked for, and the plan is clean while the site is
+# unreachable.
+#
+# That gap is covered by external monitoring rather than here (#23). A Terraform
+# `check` block did live in this file and could read the balancer's real
+# address, but it cost 69% of every plan's output to a re-read it must perform
+# on each run, plus a `load_balancer:read` scope existing only for it — to
+# detect, only at the moment someone plans, what a synthetic probe detects
+# continuously and from outside.
+#
+# What that trade gives up is the precise message. A probe says the site is
+# down; it does not say which value is stale. So: **if heptapedal.com breaks,
+# check `apex_ip` against the live address before looking further.**
+#
+#   kubectl get gateway heptapedal -n gateway \
+#     -o jsonpath='{.status.addresses[0].value}'
 resource "digitalocean_record" "apex" {
   count = var.apex_record ? 1 : 0
 
@@ -24,33 +41,4 @@ resource "digitalocean_record" "apex" {
   # product). A low TTL means the switch costs minutes rather than half an hour,
   # without having to remember to lower it beforehand.
   ttl = var.apex_ttl
-}
-
-# Terraform compares configuration against state, never against reality, so a
-# stale `apex_ip` produces no diff: the record matches what was asked for, and
-# the plan is clean while the site is unreachable. Nothing here would notice.
-#
-# A check block notices, and does so without turning the record into a
-# dependency — scoped data source failures are masked as warnings, and failed
-# assertions are warnings too, so a cluster that has no Load Balancer yet still
-# plans and applies cleanly.
-#
-# Requires `load_balancer:read` on the DigitalOcean token. Without that scope
-# the data source 403s and every plan carries a warning, which is worse than no
-# check at all: either grant the scope or delete this block.
-check "apex_matches_the_load_balancer" {
-  data "digitalocean_loadbalancer" "gateway" {
-    # Fixed by the Gateway's do-loadbalancer-name annotation, so this survives
-    # the Load Balancer being recreated.
-    name = "heptapedal"
-  }
-
-  assert {
-    condition = !var.apex_record || data.digitalocean_loadbalancer.gateway.ip == var.apex_ip
-    error_message = format(
-      "apex_ip is %s but the load balancer is at %s — heptapedal.com points nowhere. Update apex_ip.",
-      var.apex_ip,
-      data.digitalocean_loadbalancer.gateway.ip,
-    )
-  }
 }

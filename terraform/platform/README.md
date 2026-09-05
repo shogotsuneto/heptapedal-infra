@@ -320,9 +320,9 @@ nothing: DigitalOcean stores the address it is given. What sits at that address
 is the Gateway's Load Balancer, created downstream by Argo CD — so the *value*
 comes from GitOps even though the record does not depend on it.
 
-That leaves one hazard, which the `check` block in `dns-apex.tf` covers:
-Terraform compares configuration to state, never to reality, so a stale
-`apex_ip` produces **no diff at all** while the site is unreachable.
+That leaves one hazard, and nothing in this repository catches it: Terraform
+compares configuration to state, never to reality, so a stale `apex_ip` produces
+**no diff at all** while the site is unreachable.
 
 On a rebuild the address changes and there is no way to pin it — reserved IPs
 cannot attach to DigitalOcean Load Balancers, and `do-loadbalancer-ip` takes a
@@ -346,11 +346,21 @@ The record's TTL is 300s rather than the usual 1800 for the same reason: it is
 expected to change, and a short TTL means minutes rather than half an hour
 without having to remember to lower it beforehand.
 
-### The check needs one token scope
+### When the site is down, suspect this first
 
-`load_balancer:read`. Without it the data source 403s and **every plan carries a
-warning**, which is worse than no check — either grant the scope or delete the
-block.
+Detection belongs to external monitoring (#23), which watches continuously and
+from outside — where a Terraform `check` block could only look at the moment
+someone planned, and cost most of every plan's output to do it.
+
+The trade is that a probe reports the symptom, not the cause. So make the cheap
+check first: compare `apex_ip` against the address the Gateway actually has.
+
+```bash
+kubectl get gateway heptapedal -n gateway -o jsonpath='{.status.addresses[0].value}'
+dig +short heptapedal.com A
+```
+
+Two different answers, and the fix is one variable.
 
 ## Operational notes
 
