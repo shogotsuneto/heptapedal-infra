@@ -19,7 +19,7 @@ spec:
   source:
     repoURL: ghcr.io/shogotsuneto/charts
     chart: heptapedal-app
-    targetRevision: 0.2.0
+    targetRevision: 0.2.1
     helm:
       valuesObject:
         imagePullSecrets:
@@ -28,6 +28,23 @@ spec:
         # Served over HTTPS here, unlike the local http Kind stack, so the
         # session cookie can be marked Secure.
         cookieSecure: true
+
+        # Where confirmation and password-reset emails point. The chart leaves
+        # this empty, which sends no `redirect_to` and lets GoTrue fall back to
+        # the Supabase project's Site URL — correct for us today, since that is
+        # set to this origin.
+        #
+        # Set explicitly anyway, because the fallback makes production depend on
+        # a console setting shared with local development. One Supabase project
+        # serves both; the day Site URL is pointed back at localhost so local
+        # sign-up works, production's email links break again, exactly as they
+        # did before. Naming the origin here decouples the two.
+        #
+        # Requires this origin in Supabase → Authentication → URL Configuration
+        # → **Redirect URLs**. A value that is not allowlisted is ignored and
+        # falls back to Site URL, so setting it before allowlisting is safe but
+        # does nothing.
+        emailRedirectBase: https://heptapedal.com
 
         # The two routing surfaces are independent switches, not either/or.
         # This cluster has no Ingress controller — ingress-nginx reached end of
