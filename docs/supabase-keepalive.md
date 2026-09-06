@@ -4,10 +4,10 @@ Free projects pause after a week without activity. Authentication lives there
 ([ADR 0008](adr/0008-postgres-do-managed.md)), so a pause is a login outage: the
 site keeps serving pages and nobody can sign in.
 
-`.github/workflows/supabase-keepalive.yml` queries the project daily. Setup is
-two steps, both one-time.
+`gitops/apps/heptapedal/supabase-keepalive.yaml` is a CronJob that queries the
+project daily. One thing has to exist for it to query.
 
-## 1. Create the row it queries
+## Setup: create the row it queries
 
 Supabase → SQL Editor. This exists to be selected from; it holds nothing.
 
@@ -35,39 +35,55 @@ query running.
 The RLS policy grants `anon` nothing but the ability to read a row containing
 the number 1.
 
-## 2. Add two repository secrets
-
-`SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`, the same values as the sealed
-`app-secrets`.
-
-Secrets rather than variables, though the publishable key is already in every
-visitor's browser. That is hygiene rather than a boundary — the same reasoning
-as the plan-comment masking in ADR 0012: no reason to copy an identifier onto an
-indexed page.
+The CronJob needs nothing else. It reads `SUPABASE_URL` and
+`SUPABASE_PUBLISHABLE_KEY` from the sealed `app-secrets` the application already
+uses, so those values keep one home and a rotation has one place to reach
+([ADR 0007](adr/0007-secrets-sealed-secrets.md)).
 
 ## Verify
 
-Run the workflow by hand — **Actions → supabase-keepalive → Run workflow**. It
-should print `HTTP 200` and a row. It fails loudly on anything else, and the
+Trigger a run without waiting for the schedule:
+
+```bash
+kubectl create job -n hepta --from=cronjob/supabase-keepalive keepalive-check
+kubectl logs -n hepta job/keepalive-check
+kubectl delete job -n hepta keepalive-check
+```
+
+It should print `HTTP 200` and a row. It fails loudly on anything else, and the
 message names the three things it can be: a paused project, a missing table, or
 a rotated key.
 
 The ping is also the check. A paused project cannot answer, so there is no
 separate probe that could rot without anyone noticing.
 
-## Two ways this quietly stops working
+## Why not GitHub Actions
 
-**Scheduled workflows are disabled after 60 days without repository activity**,
-[on public repositories](https://docs.github.com/actions/using-workflows/events-that-trigger-workflows).
-This repository is meant to become public (ADR 0012), so the trap arms then, and
-it chains: the workflow stops, the project pauses, login breaks — three silent
-steps from "nobody committed for two months". Renovate (#21) helps by keeping a
-trickle of pull requests, which counts as activity; that is a side effect worth
-knowing rather than a plan.
+It was written that way first. Two things argued it back into the cluster, and
+both are about not keeping a second copy of something:
 
-**A weekly cadence would have no margin.** The window is seven days and GitHub
-delays scheduled runs under load, so the job runs daily even though the ADR
-first sketched it weekly.
+- **The credentials are already here.** A workflow needs `SUPABASE_URL` and
+  `SUPABASE_PUBLISHABLE_KEY` as repository secrets — a second copy of values
+  that already live in `app-secrets`, and a second place a rotation has to
+  reach.
+- **Scheduled workflows are disabled after 60 days without repository
+  activity** on
+  [public repositories](https://docs.github.com/actions/using-workflows/events-that-trigger-workflows),
+  and this one is meant to become public (ADR 0012). That chains quietly:
+  workflow stops, project pauses, login breaks — three steps from "nobody
+  committed for two months".
+
+What moving it costs: a failing workflow emails the repository owner, and a
+failing CronJob does not. The Job's failure does reach Grafana already
+(kube-state-metrics is enabled), so what is missing is an alert rule — #23's
+work either way, since "alert if the ping fails" was never free.
+
+A cluster outage longer than a week would now also pause the project. That is a
+real coupling, and a small one: a cluster down for seven days is a rebuild
+(#24), and unpausing is a click.
+
+**A weekly cadence would have no margin.** The window is seven days, so the job
+runs daily even though the ADR first sketched it weekly.
 
 ## The actual fix
 
