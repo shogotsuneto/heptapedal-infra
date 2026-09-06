@@ -19,7 +19,7 @@ spec:
   source:
     repoURL: ghcr.io/shogotsuneto/charts
     chart: heptapedal-app
-    targetRevision: 0.2.1
+    targetRevision: 0.2.2
     helm:
       valuesObject:
         imagePullSecrets:
@@ -45,6 +45,17 @@ spec:
         # falls back to Site URL, so setting it before allowlisting is safe but
         # does nothing.
         emailRedirectBase: https://heptapedal.com
+
+        # The origin this deployment answers on, for the /mcp transport's
+        # inbound Host check. rmcp accepts only loopback by default — DNS
+        # rebinding protection, and correct for a server reached at localhost —
+        # so a public deployment that does not name itself here rejects every
+        # MCP request with "Host header is not allowed" (heptapedal#76).
+        #
+        # Comma-separated, and added to the loopback defaults rather than
+        # replacing them. No port, so it matches whatever port the request
+        # arrives on.
+        mcpAllowedHosts: heptapedal.com
 
         # The two routing surfaces are independent switches, not either/or.
         # This cluster has no Ingress controller — ingress-nginx reached end of
