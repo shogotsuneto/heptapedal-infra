@@ -387,12 +387,17 @@ here reads. Worth checking after any change to the Supabase project, and worth
 knowing as the first suspect when accounts cannot be created on a deployment
 that otherwise looks healthy.
 
-**One project serves both local development and production**, so pointing Site
-URL at production means locally-triggered sign-up emails link to production too.
-Passing an explicit `redirect_to` per environment is the durable fix and belongs
-to the application ([heptapedal#72](https://github.com/shogotsuneto/heptapedal/issues/72)); until then this
-setting is a choice about which environment gets working links, and production
-is the one that has users.
+**One project serves both local development and production**, so Site URL alone
+would only ever be right for one of them. Chart 0.2.1 removes that dilemma:
+`emailRedirectBase` sends an explicit `redirect_to`, and
+`gitops/apps/heptapedal/app.yaml` sets it to this origin — so production no
+longer depends on Site URL at all, and Site URL is free to serve local
+development.
+
+That requires the origin to be listed under **Authentication → URL Configuration
+→ Redirect URLs**. A `redirect_to` that is not allowlisted is silently ignored
+and falls back to Site URL, which is the failure this whole section is about —
+so check the allowlist, not just that sign-up appeared to work.
 
 ## Operational notes
 
