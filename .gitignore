@@ -31,7 +31,10 @@ override.tf.json
 plan.out
 plan.json
 
-# Credentials and kubeconfigs.
+# Credentials and kubeconfigs. .mcp.json carries a personal access token in an
+# Authorization header — it configures this project's MCP client, so it belongs
+# in the working tree but never in a commit.
+.mcp.json
 kubeconfig
 kubeconfig.*
 *.pem
