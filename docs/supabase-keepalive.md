@@ -19,12 +19,23 @@ create table if not exists public.keepalive (
 
 insert into public.keepalive (id) values (1) on conflict (id) do nothing;
 
+-- Two separate layers, and both are needed. The grant decides whether the role
+-- may touch the table at all; the policy decides which rows it then sees.
+-- Postgres checks the grant first, so a policy without a grant is
+-- `permission denied for table keepalive` — which is how this was first
+-- written, and how it first failed.
+grant select on public.keepalive to anon;
+
 alter table public.keepalive enable row level security;
 
 create policy keepalive_anon_select
   on public.keepalive for select to anon
   using (true);
 ```
+
+RLS is enabled even though the table holds nothing worth protecting: a table in
+`public` without it trips Supabase's own security advisor, and the policy costs
+one line.
 
 **Why a table rather than a health check.** The documented rule is *sufficient
 user database activity*, and `/auth/v1/health` answers from configuration
@@ -50,9 +61,11 @@ kubectl logs -n hepta job/keepalive-check
 kubectl delete job -n hepta keepalive-check
 ```
 
-It should print `HTTP 200` and a row. It fails loudly on anything else, and the
-message names the three things it can be: a paused project, a missing table, or
-a rotated key.
+It should print `HTTP 200` and a row.
+
+On anything else it fails loudly and prints the response body, which is where
+the useful detail is — Postgres names the missing privilege and the exact
+`grant` that fixes it, which no message written in advance could do as well.
 
 The ping is also the check. A paused project cannot answer, so there is no
 separate probe that could rot without anyone noticing.
