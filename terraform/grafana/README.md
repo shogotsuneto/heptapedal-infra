@@ -44,9 +44,14 @@ Alloy already ships and turns four of them into things that will wake somebody.
    one would be an address on an indexed page (ADR 0012).
 5. `AWS_*` set to the bucket-scoped Spaces key, for the backend.
 
-In CI the same three arrive as `secrets.GRAFANA_AUTH`,
-`vars.GRAFANA_STACK_SLUG` and `secrets.ALERT_EMAIL`. The slug is a variable
-rather than a secret because it is half of a URL.
+In CI the same four arrive as `secrets.GRAFANA_AUTH`,
+`secrets.GRAFANA_SM_ACCESS_TOKEN`, `vars.GRAFANA_STACK_SLUG` and
+`secrets.ALERT_EMAIL`. The slug is a variable rather than a secret because it is
+half of a URL; the rest are secrets.
+
+CI applies this stack, so it needs every credential the stack does — including
+the Synthetic Monitoring token, without which the apply fails at the probe
+lookup rather than skipping the check.
 
 If granting **Data sources: Reader** is not wanted, the lookup is the only
 reason for it: set `prometheus_datasource_name` aside and pin the UID directly
