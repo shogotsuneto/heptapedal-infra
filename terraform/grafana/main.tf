@@ -3,6 +3,10 @@ locals {
     var.prometheus_datasource_name,
     "grafanacloud-${var.grafana_stack_slug}-prom",
   )
+  loki_datasource = coalesce(
+    var.loki_datasource_name,
+    "grafanacloud-${var.grafana_stack_slug}-logs",
+  )
 }
 
 # Looked up rather than hardcoded: the UID is generated per stack, so a literal

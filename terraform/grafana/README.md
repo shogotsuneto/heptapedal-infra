@@ -17,8 +17,8 @@ Alloy already ships and turns four of them into things that will wake somebody.
    | Fixed role | For |
    |---|---|
    | `fixed:alerting.provisioning:writer` | the rule group, contact point and notification policy |
-   | `fixed:folders:writer` | `grafana_folder` — alert rules always live in a folder |
-   | `fixed:datasources:reader` | looking up the Prometheus data source's UID by name |
+   | `fixed:folders:writer` | `grafana_folder` — alert rules always live in a folder. It also carries the dashboard permissions, so dashboards need no role of their own |
+   | `fixed:datasources:reader` | looking up the Prometheus and Loki data source UIDs by name |
 
    Two of those are easy to get wrong, and both were:
 
@@ -54,6 +54,42 @@ instead, at the cost of a value nobody can re-derive after a rebuild.
 tofu init
 tofu apply
 ```
+
+## Dashboards
+
+Every `*.json` in `dashboards/` becomes a dashboard in the `heptapedal` folder.
+Adding one is dropping a file there.
+
+That indirection exists because a dashboard is something you build by looking at
+it, and edit-apply-look is a poor loop for that. Build it in the UI, then:
+
+1. Dashboard settings → **JSON Model**, or Export → **Export as JSON**. Do *not*
+   tick "Export for sharing externally" — that rewrites data sources into
+   `${DS_*}` inputs this cannot resolve.
+2. Save it into `dashboards/`.
+3. Replace the data source UIDs with `__PROMETHEUS_UID__` and `__LOKI_UID__` so
+   the file is not pinned to one stack's generated IDs. Optional — a literal UID
+   works, it is just less portable.
+
+Substitution is literal string replacement, not templating, so Grafana's own
+`${...}` syntax passes through untouched. A file exported from the UI applies as
+it is.
+
+The dashboard's identity is the `uid` inside its JSON, and `overwrite` is on, so
+a dashboard first drawn in the UI is adopted by committing its export rather
+than duplicated beside itself. From then on the file is the source of truth: an
+edit made in the UI and not exported will be overwritten by the next apply.
+
+### The one that ships
+
+`heptapedal-overview` — memory against limits from cadvisor, and request rate,
+latency and status classes **derived from logs** rather than from metrics.
+
+The application exposes no `/metrics`, but v0.2.2 emits structured JSON with
+`route`, `status` and `latency_ms` on every completed request, so Loki answers
+the same questions with no application change and no new pipeline. `unwrap
+span_latency_ms` gives the quantiles; `| json` flattens the nested span fields
+with an underscore, which is where `span_route` and `span_status` come from.
 
 ## What it alerts on
 
