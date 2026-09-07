@@ -28,6 +28,11 @@ export AWS_SECRET_ACCESS_KEY=""
 # `folders:writer`, `datasources:reader`. See terraform/grafana/README.md.
 export GRAFANA_AUTH=""
 
+# Synthetic Monitoring has its own API and its own tokens. Synthetics → Config →
+# request an API key. No Cloud Access Policy token is needed; the plugin is
+# already installed on the stack.
+export GRAFANA_SM_ACCESS_TOKEN=""
+
 # The stack slug is the first label of https://<slug>.grafana.net. It also
 # derives the data source names the alerts and dashboards query.
 export TF_VAR_grafana_stack_slug=""

@@ -23,6 +23,32 @@ variable "loki_datasource_name" {
   default     = null
 }
 
+variable "sm_url" {
+  description = <<-EOT
+    The Synthetic Monitoring API for the stack's region. Read off the installed
+    plugin's settings rather than guessed; it must match the region the stack
+    lives in.
+  EOT
+  type        = string
+  default     = "https://synthetic-monitoring-api-ca-east-0.grafana.net"
+}
+
+variable "probe_locations" {
+  description = <<-EOT
+    Public probe names, from the 22 Grafana offers. Three is the recommended
+    number — executions are counted per probe, so each one multiplies the cost
+    of the check rather than adding to it.
+
+    Chosen for where this application's readers are rather than for spread:
+    NorthCalifornia sits next to the sfo3 deployment and so isolates the
+    application from the network, Calgary is the nearest probe to the operator,
+    and Tokyo covers the other half of a bilingual audience across the path most
+    likely to break independently.
+  EOT
+  type        = list(string)
+  default     = ["NorthCalifornia", "Calgary", "Tokyo"]
+}
+
 variable "alert_email" {
   description = <<-EOT
     Where alerts go. Deliberately without a default: the repository is written

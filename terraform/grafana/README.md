@@ -34,15 +34,24 @@ Alloy already ships and turns four of them into things that will wake somebody.
    webhook, say — add `fixed:alerting.provisioning.secrets:reader`, which lets
    the provider read back what it wrote; the email contact point here has no
    secure settings and does not need it.
-2. **The stack slug** — the first label of the Grafana URL, so
+2. **A Synthetic Monitoring token** — Synthetics → Config → request an API
+   key. `GRAFANA_SM_ACCESS_TOKEN`. Distinct from the one above: Synthetic
+   Monitoring has its own API and its own tokens. No Cloud Access Policy token
+   is needed, because the plugin is already installed on the stack.
+3. **The stack slug** — the first label of the Grafana URL, so
    `https://<slug>.grafana.net`. `TF_VAR_grafana_stack_slug`.
-3. **Where alerts go** — `TF_VAR_alert_email`. No default, because a committed
+4. **Where alerts go** — `TF_VAR_alert_email`. No default, because a committed
    one would be an address on an indexed page (ADR 0012).
-4. `AWS_*` set to the bucket-scoped Spaces key, for the backend.
+5. `AWS_*` set to the bucket-scoped Spaces key, for the backend.
 
-In CI the same three arrive as `secrets.GRAFANA_AUTH`,
-`vars.GRAFANA_STACK_SLUG` and `secrets.ALERT_EMAIL`. The slug is a variable
-rather than a secret because it is half of a URL.
+In CI the same four arrive as `secrets.GRAFANA_AUTH`,
+`secrets.GRAFANA_SM_ACCESS_TOKEN`, `vars.GRAFANA_STACK_SLUG` and
+`secrets.ALERT_EMAIL`. The slug is a variable rather than a secret because it is
+half of a URL; the rest are secrets.
+
+CI applies this stack, so it needs every credential the stack does — including
+the Synthetic Monitoring token, without which the apply fails at the probe
+lookup rather than skipping the check.
 
 If granting **Data sources: Reader** is not wanted, the lookup is the only
 reason for it: set `prometheus_datasource_name` aside and pin the UID directly
@@ -106,6 +115,21 @@ returns few series whatever it consumed. The latency panel has no outer
 aggregation, so it hit the ceiling first — hence the `by (container)` on its
 range aggregation as well.
 
+## The external probe
+
+`site_unreachable` and `certificate_expiring` come from a Synthetic Monitoring
+check rather than from the cluster, and that is the point: everything else here
+watches from inside, which cannot answer whether the internet can reach the
+Gateway or what certificate a visitor is actually served.
+
+It is also the standing detector for a stale apex A record. #72 removed the
+Terraform `check` that watched it, arguing that continuous outside-in monitoring
+covers the same failure better — this is that monitoring.
+
+Three probes at five-minute intervals is ~26k executions a month against a free
+allowance of 100k. **Executions are counted per probe, not per check**, so a
+fourth probe or a one-minute interval is not the small change it looks like.
+
 ## What it alerts on
 
 | Alert | Fires when | Why it is worth waking for |
@@ -114,6 +138,8 @@ range aggregation as well.
 | `app_unavailable` | the `app` Deployment has no available replica | the site is down |
 | `node_memory_pressure` | a kubelet sets `MemoryPressure` | eviction is imminent, and there is ~650 MiB of headroom to lose (#67) |
 | `app_restarting` | a container in `hepta` restarts | containers do not restart during a deploy, so it is a crash — most likely an OOMKill against a limit that was guessed (#18) |
+| `site_unreachable` | most probe locations cannot fetch the site | the only check that sees what a visitor sees |
+| `certificate_expiring` | under 21 days left on the **served** certificate | renewal has been failing for over a week |
 
 The first is the one that justifies the stack. It is the only failure here whose
 symptom is *nothing happening*, and a CronJob that stops emails no one.
@@ -126,16 +152,16 @@ the same reason — a missing metric there *is* the outage.
 
 ## What is not alerted on, and why
 
-**Certificate expiry.** cert-manager exposes it, but nothing scrapes
-cert-manager: Alloy collects `kube-state-metrics`, `kubelet`,
-`kubelet_resources` and `cadvisor`, and no application endpoints. Rather than
-add a scrape, this belongs to an external probe — which also checks the
-certificate actually being served rather than what cert-manager believes it
-issued, and covers DNS and reachability in the same check. **#80.**
+**Argo CD out of sync.** Nothing scrapes Argo CD — Alloy collects
+`kube-state-metrics`, `kubelet`, `kubelet_resources` and `cadvisor`, and no
+application endpoints — and it is a weaker signal besides: git and the cluster
+differing is not an outage. `argocd-notifications` reports it directly if it
+becomes worth knowing, and costs no series.
 
-**Argo CD out of sync.** Also unscraped, and a weaker signal: out-of-sync means
-git and the cluster differ, which is not an outage. If it becomes worth
-knowing, `argocd-notifications` reports it directly and costs no series.
+**Application request rates and errors.** The application exposes no
+`/metrics`, but it does emit structured logs with everything needed, so these
+are dashboard panels queried from Loki rather than alerts. An alert on an error
+rate needs a baseline that a site with no traffic does not have yet.
 
 ## Shape
 

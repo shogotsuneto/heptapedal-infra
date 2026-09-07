@@ -66,6 +66,40 @@ locals {
       no_data = "OK"
     }
 
+    site_unreachable = {
+      summary     = "heptapedal.com is failing its external probe"
+      description = <<-EOT
+        More than half the probe locations cannot fetch
+        https://heptapedal.com/login. This is the one alert that sees what a
+        visitor sees, so it also covers the things no in-cluster check can: a
+        stale apex A record (#72 removed the Terraform check that watched it),
+        an unreachable Load Balancer, and an invalid certificate.
+      EOT
+      # Averaged across probes and compared to half, so one flaky location does
+      # not page. `for` then requires it to persist.
+      expr    = <<-EOT
+        avg by (job) (probe_success{job="heptapedal"}) < bool 0.5
+      EOT
+      for     = "10m"
+      no_data = "Alerting"
+    }
+
+    certificate_expiring = {
+      summary     = "The served certificate expires in under three weeks"
+      description = <<-EOT
+        Measured on the certificate actually being served, not on what
+        cert-manager believes it issued. Let's Encrypt issues for 90 days and
+        cert-manager renews with 30 remaining, so this means renewal has been
+        failing for over a week — with three weeks left to notice and fix it.
+      EOT
+      expr        = <<-EOT
+        (min by (job) (probe_ssl_earliest_cert_expiry{job="heptapedal"}) - time()) / 86400 < bool 21
+      EOT
+      for         = "30m"
+      # Absent here means the probe is gone, which `site_unreachable` covers.
+      no_data = "OK"
+    }
+
     app_restarting = {
       summary     = "A container in hepta is restarting"
       description = <<-EOT
