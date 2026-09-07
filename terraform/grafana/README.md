@@ -11,18 +11,29 @@ Alloy already ships and turns four of them into things that will wake somebody.
 1. **A Grafana service account token.** Grafana Cloud → Administration → Users
    and access → Service accounts. Export as `GRAFANA_AUTH`.
 
-   Basic role **Viewer** (or none), plus three roles. Alerting alone is not
-   enough, because this stack does two things that are not alerting:
+   Basic role **Viewer** (or none), plus these three. Search the role picker by
+   the identifier — the display names vary and the identifiers do not.
 
-   | Role | For |
+   | Fixed role | For |
    |---|---|
-   | Alerting: Full admin access | the rule group, contact point and notification policy |
-   | Folders: Creator | `grafana_folder` — alert rules always live in a folder |
-   | Data sources: Reader | looking up the Prometheus data source's UID by name |
+   | `fixed:alerting.provisioning:writer` | the rule group, contact point and notification policy |
+   | `fixed:folders:writer` | `grafana_folder` — alert rules always live in a folder |
+   | `fixed:datasources:reader` | looking up the Prometheus data source's UID by name |
 
-   Underneath: `fixed:alerting.rules:writer` +
-   `fixed:alerting.notifications:writer`, `fixed:folders:creator`,
-   `fixed:datasources:reader`. Admin is not required.
+   Two of those are easy to get wrong, and both were:
+
+   - **Provisioning, not alerting.** The Terraform provider writes through
+     `/api/v1/provisioning/…`, so a role that grants managing alerts by other
+     means still returns `403` here. `fixed:alerting.provisioning:writer` is the
+     one that covers rules, contact points and notification policies together.
+   - **Writer, not creator.** `fixed:folders:creator` grants `folders:create`
+     and nothing else, so Terraform creates the folder and then fails reading it
+     back. A managed resource needs read, update and delete too.
+
+   Admin is not required. If a contact point ever carries a secret — a Slack
+   webhook, say — add `fixed:alerting.provisioning.secrets:reader`, which lets
+   the provider read back what it wrote; the email contact point here has no
+   secure settings and does not need it.
 2. **The stack slug** — the first label of the Grafana URL, so
    `https://<slug>.grafana.net`. `TF_VAR_grafana_stack_slug`.
 3. **Where alerts go** — `TF_VAR_alert_email`. No default, because a committed
