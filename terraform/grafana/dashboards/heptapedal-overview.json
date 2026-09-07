@@ -39,11 +39,11 @@
       ],
       "fieldConfig": {
         "defaults": {
+          "unit": "bytes",
           "custom": {
             "fillOpacity": 10,
             "lineWidth": 1
-          },
-          "unit": "bytes"
+          }
         },
         "overrides": []
       }
@@ -65,17 +65,17 @@
         {
           "refId": "A",
           "queryType": "range",
-          "expr": "sum by (span_route) (rate({namespace=\"hepta\", container=\"app\"} | json | target=`hepta::http` [$__auto]))",
-          "legendFormat": "{{span_route}}"
+          "expr": "sum by (route) (rate({namespace=\"hepta\", container=\"app\"} | json target=\"target\", route=\"span.route\" | target=`hepta::http` [$__auto]))",
+          "legendFormat": "{{route}}"
         }
       ],
       "fieldConfig": {
         "defaults": {
+          "unit": "reqps",
           "custom": {
             "fillOpacity": 10,
             "lineWidth": 1
-          },
-          "unit": "reqps"
+          }
         },
         "overrides": []
       }
@@ -97,23 +97,23 @@
         {
           "refId": "A",
           "queryType": "range",
-          "expr": "quantile_over_time(0.95, {namespace=\"hepta\", container=\"app\"} | json | target=`hepta::http` | unwrap span_latency_ms [$__auto])",
+          "expr": "quantile_over_time(0.95, {namespace=\"hepta\", container=\"app\"} | json target=\"target\", latency_ms=\"span.latency_ms\" | target=`hepta::http` | unwrap latency_ms [$__auto]) by (container)",
           "legendFormat": "p95"
         },
         {
           "refId": "B",
           "queryType": "range",
-          "expr": "quantile_over_time(0.50, {namespace=\"hepta\", container=\"app\"} | json | target=`hepta::http` | unwrap span_latency_ms [$__auto])",
+          "expr": "quantile_over_time(0.50, {namespace=\"hepta\", container=\"app\"} | json target=\"target\", latency_ms=\"span.latency_ms\" | target=`hepta::http` | unwrap latency_ms [$__auto]) by (container)",
           "legendFormat": "p50"
         }
       ],
       "fieldConfig": {
         "defaults": {
+          "unit": "ms",
           "custom": {
             "fillOpacity": 10,
             "lineWidth": 1
-          },
-          "unit": "ms"
+          }
         },
         "overrides": []
       }
@@ -135,17 +135,17 @@
         {
           "refId": "A",
           "queryType": "range",
-          "expr": "sum by (span_status) (rate({namespace=\"hepta\", container=\"app\"} | json | target=`hepta::http` [$__auto]))",
-          "legendFormat": "{{span_status}}"
+          "expr": "sum by (status) (rate({namespace=\"hepta\", container=\"app\"} | json target=\"target\", status=\"span.status\" | target=`hepta::http` [$__auto]))",
+          "legendFormat": "{{status}}"
         }
       ],
       "fieldConfig": {
         "defaults": {
+          "unit": "reqps",
           "custom": {
             "fillOpacity": 10,
             "lineWidth": 1
-          },
-          "unit": "reqps"
+          }
         },
         "overrides": []
       }
