@@ -186,3 +186,22 @@ jobs:
         run: |
           tofu init -input=false
           tofu apply -input=false -auto-approve -lock-timeout=5m
+
+      # Last, and not because anything waits for it: this stack configures
+      # Grafana Cloud and touches neither the cloud nor the cluster. Its
+      # credentials are scoped to that and are set only on this step, so the
+      # earlier ones cannot reach alerting even by accident.
+      #
+      # Like argocd, it is not planned on pull requests — that would need a
+      # second, read-only Grafana token, and the same reasoning applies: it is
+      # first planned by its own apply run, where the output is visible before
+      # anything changes.
+      - name: grafana
+        working-directory: terraform/grafana
+        env:
+          GRAFANA_AUTH: ${{ secrets.GRAFANA_AUTH }}
+          TF_VAR_grafana_stack_slug: ${{ vars.GRAFANA_STACK_SLUG }}
+          TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
+        run: |
+          tofu init -input=false
+          tofu apply -input=false -auto-approve -lock-timeout=5m
