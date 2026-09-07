@@ -87,9 +87,24 @@ latency and status classes **derived from logs** rather than from metrics.
 
 The application exposes no `/metrics`, but v0.2.2 emits structured JSON with
 `route`, `status` and `latency_ms` on every completed request, so Loki answers
-the same questions with no application change and no new pipeline. `unwrap
-span_latency_ms` gives the quantiles; `| json` flattens the nested span fields
-with an underscore, which is where `span_route` and `span_status` come from.
+the same questions with no application change and no new pipeline.
+
+**Extract only the fields a panel uses.** A bare `| json` promotes *every*
+parsed field to a label, `trace_id` and `uri` included — which is one series per
+request, and Loki refuses past 500 of them. Naming the fields keeps the label
+set to what the panel groups by:
+
+```logql
+{namespace="hepta", container="app"}
+  | json target="target", latency_ms="span.latency_ms"
+  | target=`hepta::http`
+  | unwrap latency_ms
+```
+
+An aggregation hides the problem rather than avoiding it: `sum by (route)`
+returns few series whatever it consumed. The latency panel has no outer
+aggregation, so it hit the ceiling first — hence the `by (container)` on its
+range aggregation as well.
 
 ## What it alerts on
 
