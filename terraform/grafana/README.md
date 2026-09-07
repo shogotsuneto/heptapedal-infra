@@ -9,8 +9,26 @@ Alloy already ships and turns four of them into things that will wake somebody.
 ## Prerequisites
 
 1. **A Grafana service account token.** Grafana Cloud → Administration → Users
-   and access → Service accounts. It needs write access to alerting; the
-   built-in **Admin** role covers it. Export as `GRAFANA_AUTH`.
+   and access → Service accounts. Export as `GRAFANA_AUTH`.
+
+   Basic role **Viewer** (or none), plus three roles. Alerting alone is not
+   enough, because this stack does two things that are not alerting:
+
+   | Role | For |
+   |---|---|
+   | Alerting: Full admin access | the rule group, contact point and notification policy |
+   | Folders: Creator | `grafana_folder` — alert rules always live in a folder |
+   | Data sources: Reader | looking up the Prometheus data source's UID by name |
+
+   Underneath they are `fixed:alerting.rules:writer` +
+   `fixed:alerting.notifications:writer`, `fixed:folders:creator` and
+   `fixed:datasources:reader`. **Admin is not required** — an earlier version of
+   this file said it was, which was a guess rather than a reading of what the
+   configuration calls.
+
+   A read-only token, should the stack ever be planned on pull requests, is the
+   same three read variants: Alerting: Full read-only access, Folders: Reader,
+   Data sources: Reader.
 2. **The stack slug** — the first label of the Grafana URL, so
    `https://<slug>.grafana.net`. `TF_VAR_grafana_stack_slug`.
 3. **Where alerts go** — `TF_VAR_alert_email`. No default, because a committed
@@ -20,6 +38,10 @@ Alloy already ships and turns four of them into things that will wake somebody.
 In CI the same three arrive as `secrets.GRAFANA_AUTH`,
 `vars.GRAFANA_STACK_SLUG` and `secrets.ALERT_EMAIL`. The slug is a variable
 rather than a secret because it is half of a URL.
+
+If granting **Data sources: Reader** is not wanted, the lookup is the only
+reason for it: set `prometheus_datasource_name` aside and pin the UID directly
+instead, at the cost of a value nobody can re-derive after a rebuild.
 
 ## Apply
 
