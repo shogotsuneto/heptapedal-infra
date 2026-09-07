@@ -20,3 +20,18 @@ export SPACES_SECRET_ACCESS_KEY=""
 # the bucket exists.
 export AWS_ACCESS_KEY_ID=""
 export AWS_SECRET_ACCESS_KEY=""
+
+# Grafana Cloud, read only by `terraform/grafana`. A service account token —
+# Administration → Users and access → Service accounts — carrying three fixed
+# roles rather than Admin: `alerting.provisioning:writer` (the provider writes
+# through the provisioning API, which ordinary alerting roles do not cover),
+# `folders:writer`, `datasources:reader`. See terraform/grafana/README.md.
+export GRAFANA_AUTH=""
+
+# The stack slug is the first label of https://<slug>.grafana.net. It also
+# derives the data source names the alerts and dashboards query.
+export TF_VAR_grafana_stack_slug=""
+
+# Where alerts go. The variable has no default in the configuration on purpose:
+# a committed one would be an address on an indexed page (ADR 0012).
+export TF_VAR_alert_email=""
