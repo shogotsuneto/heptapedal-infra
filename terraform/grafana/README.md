@@ -69,7 +69,7 @@ cert-manager: Alloy collects `kube-state-metrics`, `kubelet`,
 `kubelet_resources` and `cadvisor`, and no application endpoints. Rather than
 add a scrape, this belongs to an external probe — which also checks the
 certificate actually being served rather than what cert-manager believes it
-issued, and covers DNS and reachability in the same check. Tracked on #23.
+issued, and covers DNS and reachability in the same check. **#80.**
 
 **Argo CD out of sync.** Also unscraped, and a weaker signal: out-of-sync means
 git and the cluster differ, which is not an outage. If it becomes worth
