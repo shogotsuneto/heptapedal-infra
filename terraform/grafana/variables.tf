@@ -23,6 +23,25 @@ variable "loki_datasource_name" {
   default     = null
 }
 
+variable "sm_url" {
+  description = <<-EOT
+    The Synthetic Monitoring API for the stack's region. Read off the installed
+    plugin's settings rather than guessed; it must match the region the stack
+    lives in.
+  EOT
+  type        = string
+  default     = "https://synthetic-monitoring-api-ca-east-0.grafana.net"
+}
+
+variable "probe_locations" {
+  description = <<-EOT
+    Public probe names. Three is the recommended number — executions are billed
+    per probe, so each one multiplies the cost of the check.
+  EOT
+  type        = list(string)
+  default     = ["NorthCalifornia", "NewYork", "Frankfurt"]
+}
+
 variable "alert_email" {
   description = <<-EOT
     Where alerts go. Deliberately without a default: the repository is written
