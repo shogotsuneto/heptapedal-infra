@@ -200,34 +200,57 @@ the free tier includes 2,232 and 37,944 per month. Enabling it does start
 metering, which is what the warning in the console means; it does not start
 charging until those are exceeded.
 
-|                                             | projected | allowance |     |
-| ------------------------------------------- | --------- | --------- | --- |
-| host hours                                  | 1,460     | 2,232     | 65% |
-| container hours                             | 27,156    | 37,944    | 72% |
-| active series                               | 4,440     | 10,000    | 44% |
-| container hours, once the application lands | 29,346    | 37,944    | 77% |
+Measured against the metered figures rather than projected, once the
+application and the external probe were both running. Monthly columns are the
+observed daily rate over thirty days.
 
-**Init containers are not billed.** That was the open question, and the answer
-straddled the allowance — 73% counting only running containers, 102% counting
-init containers as well, which the Kubernetes Overview dashboard does.
+|                        | measured | allowance |     |
+| ---------------------- | -------- | --------- | --- |
+| container hours        | 29,136   | 37,944    | 77% |
+| host hours             | 1,381    | 2,232     | 62% |
+| active series          | 3,277    | 10,000    | 33% |
+| logs                   | 10.5 GB  | 50 GB     | 21% |
+| synthetic executions   | ~26,000  | 100,000   | 26% |
 
-Settled by arithmetic on the metered figures rather than by argument: 5 host
-hours across two nodes is 2.5 hours elapsed, and 93 container hours over 2.5
-hours is 37.2 containers. The cluster runs 38, with 15 init containers beside
-them. 37.2 is the former — a little under, because the Alloy pods started after
-the rest.
+Nothing is over, and the earlier projections were close — series came in lower
+than the 44% feared, container hours landed on the 77% predicted.
 
-Worth re-reading over a longer window, and again once the application lands, but
-the shape is settled.
+**Init containers are not billed.** That was the open question, and it
+straddled the allowance: 77% counting only running containers, and over it
+counting init containers too, which the Kubernetes Overview dashboard does.
 
-**Host hours effectively cap this cluster at two nodes.** A third would reach
-2,190 of 2,232 — 98%, before any margin for a surge upgrade. Growing the node
-pool therefore moves two budgets, not one: the 24 USD/month in
-[ADR 0004](../../docs/adr/0004-kubernetes-on-doks.md) and this allowance. Neither
-ADR noticed it was constraining the other.
+Settled exactly rather than by argument. The metered rate is 971.21 container
+hours a day, which is 40.5 containers; the cluster runs **40** containers with
+**15** init containers beside them. The billed figure is the former.
 
-**The series count has room.** 4,440 of the 10k allowance, against a worry that
-cAdvisor plus kube-state-metrics might approach it. No trimming needed for now.
+**Container hours are the binding allowance, and they scale with pods.** At 77%
+this is the number that will run out first, and it grows with every container
+scheduled — a second application, a sidecar, or a third node's DaemonSet
+replicas. `excludeNamespaces` does not help here: this dimension counts what
+runs, not what is scraped.
+
+**When this cluster needs more room, it grows upward rather than outward** —
+larger nodes rather than more of them, and a pool that need not be uniform.
+
+The reason is mostly that a node has a large fixed cost. Of a 4 GB node, roughly
+1.07 GiB never reaches a workload, and Cilium and the Alloy log collector take
+another ~440 MiB as DaemonSets — so about 37% is gone before anything is
+scheduled, and that fraction shrinks as the node grows. The workload is also
+lopsided: embeddings wants a gigabyte and the application eleven megabytes, which
+one large node accommodates more easily than two medium ones. Mixed sizes are
+worth keeping available for the same reason, which is part of what #67's move to
+a separate node pool resource buys.
+
+Two allowances point the same way without being the argument on their own.
+Container hours are billed per container, so each node's DaemonSet replicas cost
+something; and host hours would reach 2,071 of 2,232 at three nodes — 93%,
+before any margin for the surge upgrade that briefly adds a fourth. Neither
+forbids scaling out. They just make it the more expensive direction, on top of
+the 24 USD/month in [ADR 0004](../../docs/adr/0004-kubernetes-on-doks.md).
+
+**The series count has room.** 3,277 of the 10k allowance, against a worry that
+cAdvisor plus kube-state-metrics might approach it. No trimming needed, and the
+lever below is for a problem this cluster does not have.
 
 The lever is `metricsTuning.includeMetrics` / `excludeMetrics`, per source,
 under `clusterMetrics` — and `excludeNamespaces` for logs. These filter at the
