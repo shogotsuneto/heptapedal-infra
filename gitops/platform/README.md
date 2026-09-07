@@ -229,11 +229,24 @@ scheduled — a second application, a sidecar, or a third node's DaemonSet
 replicas. `excludeNamespaces` does not help here: this dimension counts what
 runs, not what is scraped.
 
-**Host hours still cap this cluster at two nodes.** A third would reach 2,071 of
-2,232 — 93%, before any margin for the surge upgrade that temporarily adds a
-fourth. Growing the node pool therefore moves three budgets, not one: the
-24 USD/month in [ADR 0004](../../docs/adr/0004-kubernetes-on-doks.md), this
-allowance, and the container hours the new node's DaemonSets would add. See #67.
+**When this cluster needs more room, it grows upward rather than outward** —
+larger nodes rather than more of them, and a pool that need not be uniform.
+
+The reason is mostly that a node has a large fixed cost. Of a 4 GB node, roughly
+1.07 GiB never reaches a workload, and Cilium and the Alloy log collector take
+another ~440 MiB as DaemonSets — so about 37% is gone before anything is
+scheduled, and that fraction shrinks as the node grows. The workload is also
+lopsided: embeddings wants a gigabyte and the application eleven megabytes, which
+one large node accommodates more easily than two medium ones. Mixed sizes are
+worth keeping available for the same reason, which is part of what #67's move to
+a separate node pool resource buys.
+
+Two allowances point the same way without being the argument on their own.
+Container hours are billed per container, so each node's DaemonSet replicas cost
+something; and host hours would reach 2,071 of 2,232 at three nodes — 93%,
+before any margin for the surge upgrade that briefly adds a fourth. Neither
+forbids scaling out. They just make it the more expensive direction, on top of
+the 24 USD/month in [ADR 0004](../../docs/adr/0004-kubernetes-on-doks.md).
 
 **The series count has room.** 3,277 of the 10k allowance, against a worry that
 cAdvisor plus kube-state-metrics might approach it. No trimming needed, and the
