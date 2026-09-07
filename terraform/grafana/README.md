@@ -20,15 +20,9 @@ Alloy already ships and turns four of them into things that will wake somebody.
    | Folders: Creator | `grafana_folder` — alert rules always live in a folder |
    | Data sources: Reader | looking up the Prometheus data source's UID by name |
 
-   Underneath they are `fixed:alerting.rules:writer` +
-   `fixed:alerting.notifications:writer`, `fixed:folders:creator` and
-   `fixed:datasources:reader`. **Admin is not required** — an earlier version of
-   this file said it was, which was a guess rather than a reading of what the
-   configuration calls.
-
-   A read-only token, should the stack ever be planned on pull requests, is the
-   same three read variants: Alerting: Full read-only access, Folders: Reader,
-   Data sources: Reader.
+   Underneath: `fixed:alerting.rules:writer` +
+   `fixed:alerting.notifications:writer`, `fixed:folders:creator`,
+   `fixed:datasources:reader`. Admin is not required.
 2. **The stack slug** — the first label of the Grafana URL, so
    `https://<slug>.grafana.net`. `TF_VAR_grafana_stack_slug`.
 3. **Where alerts go** — `TF_VAR_alert_email`. No default, because a committed
