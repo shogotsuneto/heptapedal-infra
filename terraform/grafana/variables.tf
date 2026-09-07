@@ -17,6 +17,12 @@ variable "prometheus_datasource_name" {
   default     = null
 }
 
+variable "loki_datasource_name" {
+  description = "As above, for logs. Grafana Cloud names it `grafanacloud-<slug>-logs`."
+  type        = string
+  default     = null
+}
+
 variable "alert_email" {
   description = <<-EOT
     Where alerts go. Deliberately without a default: the repository is written
