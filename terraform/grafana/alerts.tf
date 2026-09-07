@@ -2,10 +2,18 @@
 # acts on trains you to ignore the channel" is easier to honour by starting
 # below what seems sufficient than by pruning later.
 #
-# Each condition is written in PromQL so the query returns nothing until it is
-# breaching; the expression stage is then a uniform `> 0`. That keeps the
-# generated rules identical in shape and the difference between them in one
-# readable place.
+# Every condition uses PromQL's `bool` modifier, so each query returns 1 when it
+# holds and 0 when it does not, and the expression stage is a uniform `> 0`
+# meaning "the condition was true". That keeps the generated rules identical in
+# shape, with the difference between them in one readable place.
+#
+# `bool` is load-bearing, not decoration. A bare comparison in PromQL filters
+# rather than returning a truth value: matching series keep their original
+# value and the rest are dropped. `replicas_available < 1` therefore breaches
+# with the value **0**, and a `> 0` threshold on that is false — the alert for
+# the site being down would never have fired. With `bool` the breach is 1
+# regardless of the underlying number, which is what the uniform threshold
+# needs.
 locals {
   alerts = {
     supabase_keepalive_stale = {
@@ -22,7 +30,7 @@ locals {
       # scheduling — the failure modes are different and the consequence is
       # identical.
       expr = <<-EOT
-        time() - max(kube_cronjob_status_last_successful_time{namespace="hepta", cronjob="supabase-keepalive"}) > 172800
+        time() - max(kube_cronjob_status_last_successful_time{namespace="hepta", cronjob="supabase-keepalive"}) > bool 172800
       EOT
       for  = "15m"
       # Absent metric means the CronJob is gone, which is the outage rather than
@@ -34,7 +42,7 @@ locals {
       summary     = "heptapedal has no available replica"
       description = "The `app` Deployment in `hepta` reports zero available replicas: the site is down."
       expr        = <<-EOT
-        kube_deployment_status_replicas_available{namespace="hepta", deployment="app"} < 1
+        kube_deployment_status_replicas_available{namespace="hepta", deployment="app"} < bool 1
       EOT
       for         = "5m"
       no_data     = "Alerting"
@@ -47,9 +55,10 @@ locals {
         pods. Two 4 GB nodes leave roughly 650 MiB of request headroom (#67).
       EOT
       # The kubelet's own judgement rather than a threshold of ours — it is the
-      # thing that acts on it.
+      # thing that acts on it. Not aggregated, so the firing instance names the
+      # node instead of saying only that one of them is unhappy.
       expr = <<-EOT
-        max(kube_node_status_condition{condition="MemoryPressure", status="true"}) > 0
+        kube_node_status_condition{condition="MemoryPressure", status="true"} > bool 0
       EOT
       for  = "5m"
       # A blip in the metrics pipeline should not read as pressure; the two
@@ -65,7 +74,7 @@ locals {
         app's memory limit was set by guess rather than measurement (#18).
       EOT
       expr        = <<-EOT
-        increase(kube_pod_container_status_restarts_total{namespace="hepta"}[30m]) > 0
+        increase(kube_pod_container_status_restarts_total{namespace="hepta"}[30m]) > bool 0
       EOT
       for         = "5m"
       no_data     = "OK"
