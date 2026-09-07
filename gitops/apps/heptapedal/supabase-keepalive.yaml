@@ -101,8 +101,14 @@ spec:
                   cat /tmp/body.json
                   echo
 
+                  # The body above carries the detail: PostgREST reports a
+                  # paused project, a missing table, a rotated key and a missing
+                  # grant differently, and Postgres names the exact `grant` when
+                  # that is what is wrong. Better than a guess written in
+                  # advance — the first version of this message listed three
+                  # causes and the real failure was a fourth.
                   [ "$code" = "200" ] || {
-                    echo "Supabase returned ${code} — a paused project, a missing keepalive table, or a rotated key. See docs/supabase-keepalive.md"
+                    echo "Supabase returned ${code}; the body above says why. See docs/supabase-keepalive.md"
                     exit 1
                   }
 
