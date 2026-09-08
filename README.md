@@ -77,7 +77,13 @@ over all of them is worse than no gate, so it was removed rather than extended
 ([ADR 0015](docs/adr/0015-plan-locally.md)). The cost is that this is a habit
 rather than a check: nothing fails if you skip it.
 
-### Setting it up
+### Rebuilding
+
+[`docs/rebuild.md`](docs/rebuild.md) — what survives a cluster replacement and
+what does not, the ordered procedure for each, and the failures worth expecting.
+It is also the shortest honest description of how the pieces fit.
+
+## Setting it up
 
 One environment, holding the credentials that can change things:
 
