@@ -46,12 +46,16 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
-  # Renovate reads a branch's commit status before deciding what to do with it,
-  # through both the statuses and check-runs APIs. Without these it creates the
-  # branch, gets 403 on GET /commits/{sha}/statuses, and aborts the whole
-  # repository with `integration-unauthorized` — logged at WARN, so the workflow
-  # still reports success while having done nothing.
-  statuses: read
+  # Renovate both reads and writes commit statuses. Reading is how it decides
+  # what to do with a branch; writing is `minimumReleaseAge`, which it surfaces
+  # as a `renovate/stability-days` check on the branch.
+  #
+  # Each half failed separately and neither said so. Missing read gave a 403 on
+  # GET /commits/{sha}/statuses reported as `integration-unauthorized`; missing
+  # write gave a 403 on POST /statuses/{sha} reported as `repository-changed`,
+  # which describes something else entirely. Both were logged at WARN, so the
+  # workflow reported success while creating nothing.
+  statuses: write
   checks: read
 
 concurrency:
