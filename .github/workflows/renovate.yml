@@ -34,9 +34,16 @@ on:
 
 # Renovate opens branches and pull requests as this repository's own token, so
 # the job needs to write both. Nothing here reaches infrastructure.
+#
+# `issues` is not optional and not obvious: Renovate queries `repository.issues`
+# while initialising, before any of its own configuration is read, and without
+# it the run dies at startup with a FORBIDDEN on that field rather than anything
+# mentioning permissions. Write, not read, because the dependency dashboard is
+# an issue it maintains.
 permissions:
   contents: write
   pull-requests: write
+  issues: write
 
 concurrency:
   group: renovate
