@@ -100,9 +100,13 @@ that can write to this repository.
 That token cannot write files under `.github/workflows/`, and no permission
 exists to let it: the `permissions:` block has no `workflows` scope. So **action
 versions are bumped by hand.** Renovate still watches them and lists them on its
-dependency dashboard; it just never opens the pull request. Do not approve one
-from the dashboard — it would try, and fail. Edit the version, and the entry
-clears itself on the next run.
+dependency dashboard; it just never opens the pull request.
+
+Approving one from the dashboard is the wrong move but a cheap mistake. Ticking
+a checkbox edits the issue and triggers nothing — the next run reads the body,
+attempts the update, and fails to push. Renovate rewrites the dashboard each
+run, so the tick is consumed and nothing retries. Edit the version by hand
+instead, and the entry clears itself once the update is no longer pending.
 
 Three actions are in scope, which is why this is a reasonable trade rather than
 a hole. If that number grows, a GitHub App token can carry `workflows` without a

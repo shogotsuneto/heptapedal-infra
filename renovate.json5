@@ -60,9 +60,14 @@
       // is being told an action moved; the edit itself is three files and no
       // judgement.
       //
-      // Do not tick the checkbox. Approving one makes Renovate try, and it will
-      // fail for the reason above. Bump the version by hand and the entry
-      // disappears on the next run.
+      // Do not tick the checkbox — though the cost of doing so is small and
+      // worth knowing rather than fearing. Ticking edits the issue and starts
+      // nothing; the next run reads the body, sees the approval, tries, and
+      // fails to push. Renovate rewrites the dashboard each run, so the tick is
+      // consumed and it does not retry. One failed run, not a loop.
+      //
+      // Bump the version by hand instead, and the entry disappears on the next
+      // run because the update is no longer pending.
       matchManagers: ["github-actions"],
       dependencyDashboardApproval: true,
       groupName: "github actions",
