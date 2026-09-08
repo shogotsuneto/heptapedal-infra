@@ -3,162 +3,123 @@
 Infrastructure and delivery for [heptapedal](https://github.com/shogotsuneto/heptapedal)
 — and, later, other applications on the same platform.
 
-Managed Kubernetes on DigitalOcean, described in Terraform-compatible HCL and
-delivered with Argo CD. The design target is a platform that a single operator can
-run for well under 100 USD/month while still being an honest example of current
-practice — Gateway API rather than a retired ingress controller, GitOps rather
-than imperative applies, and every trade-off written down.
+**It is running.** [heptapedal.com](https://heptapedal.com) serves from this
+repository: a Rust/Leptos application, an in-cluster embeddings service, and an
+MCP endpoint, on managed Kubernetes described in Terraform-compatible HCL and
+delivered by Argo CD.
+
+The design target is a platform one person can run for well under 100 USD/month
+while still being an honest example of current practice — Gateway API rather
+than a retired ingress controller, GitOps rather than imperative applies, and
+every trade-off written down rather than implied.
 
 ## Architecture
 
-| Layer | Choice |
-|---|---|
-| IaC | OpenTofu (plain Terraform HCL; `terraform` works against the same tree) |
-| State | DigitalOcean Spaces, S3-native locking (`use_lockfile`) |
-| Cluster | DOKS, non-HA control plane, 2 × `s-2vcpu-4gb` |
-| Ingress | Gateway API via Envoy Gateway |
-| TLS / DNS | cert-manager (DNS-01, wildcard) + DigitalOcean DNS |
-| Delivery | Argo CD, app-of-apps |
-| Secrets | Sealed Secrets |
-| Database | DigitalOcean Managed Postgres (pgvector); auth on Supabase |
-| Telemetry | Grafana Alloy → Grafana Cloud |
-
-Target run cost: **~80 USD/month**. The breakdown, and why each line is what it
-is, is in [ADR 0004](docs/adr/0004-kubernetes-on-doks.md).
+| Layer | Choice | |
+|---|---|---|
+| IaC | OpenTofu — plain Terraform HCL; `terraform` works against the same tree | [0002](docs/adr/0002-iac-tool-opentofu.md) |
+| State | DigitalOcean Spaces, S3-native locking | [0003](docs/adr/0003-state-backend-spaces.md) |
+| Cluster | DOKS, non-HA control plane, 2 × `s-2vcpu-4gb` | [0004](docs/adr/0004-kubernetes-on-doks.md) |
+| Ingress | Gateway API, using the Cilium implementation DOKS already ships | [0005](docs/adr/0005-gateway-api-envoy-gateway.md), [0014](docs/adr/0014-use-the-provider-gateway-implementation.md) |
+| TLS / DNS | cert-manager DNS-01 wildcard + DigitalOcean DNS | [0009](docs/adr/0009-dns-and-tls.md) |
+| Delivery | Argo CD, app-of-apps | [0006](docs/adr/0006-gitops-argo-cd-app-of-apps.md) |
+| Secrets | Sealed Secrets | [0007](docs/adr/0007-secrets-sealed-secrets.md) |
+| Database | DigitalOcean Managed Postgres with pgvector; auth on Supabase | [0008](docs/adr/0008-postgres-do-managed.md) |
+| Telemetry | Grafana Alloy → Grafana Cloud, with alerts and an external probe | [0010](docs/adr/0010-observability-grafana-cloud.md) |
 
 ## Layout
 
 ```
 terraform/
-  bootstrap/    # the state bucket — local state, applied once
+  bootstrap/    # the state bucket — local state, applied once by hand
   platform/     # project, VPC, DOKS, DNS, managed Postgres, firewall
-  argocd/       # Argo CD install + the single root Application
+  argocd/       # Argo CD, and the single root Application
+  grafana/      # alert rules, dashboards, the external probe
 gitops/
-  root/         # app-of-apps root
-  platform/     # cert-manager, Envoy Gateway, Sealed Secrets, Alloy
-  apps/         # per-application Argo CD Applications + production values
-docs/adr/       # architecture decision records
+  root/         # app-of-apps root: two child Applications
+  platform/     # cert-manager, Sealed Secrets, the shared Gateway, Alloy
+  apps/         # one directory per application
+docs/
+  adr/                    # architecture decision records
+  rebuild.md              # what survives a rebuild, and what it costs
+  supabase-keepalive.md   # keeping the free auth project from pausing
 ```
 
-Terraform's responsibility stops at the root Application; everything past that
-point reconciles from `gitops/`. See [ADR 0006](docs/adr/0006-gitops-argo-cd-app-of-apps.md).
+Terraform's responsibility stops at the root Application. Everything past that
+point reconciles from `gitops/`, which is why adding a platform add-on or an
+application needs no Terraform and no cloud credentials
+([0006](docs/adr/0006-gitops-argo-cd-app-of-apps.md)).
 
-## Continuous integration
+## How a change ships
 
-`check` on every pull request, `apply` on merge to `main` — **two workflows, so
-the boundary is structural**: `check.yml` declares no secrets and no
-environment, `terraform.yml` never runs on a pull request at all. **Planning is a local
-step, not a CI one** ([ADR 0015](docs/adr/0015-plan-locally.md)).
-`terraform/bootstrap` is excluded from apply too: it needs the full-access
-Spaces key, which is deliberately kept out of CI.
+`check` on every pull request, `apply` on merge to `main`.
 
-**Merging applies.** GitHub reserves environment protection rules — required
-reviewers, wait timers — for public repositories on this plan, so while this
-repository is private there is no approval step between merge and apply.
-Merging is the deliberate act. Turning the reviewer on is part of going public
-(#28).
+**Two workflows, so the boundary is structural rather than conditional.**
+`check.yml` declares no secrets and no environment; `terraform.yml` has no
+pull-request trigger at all. "Nothing a pull request can trigger can change
+anything" is therefore visible in the file list rather than in an `if:`
+condition — which matters on a public repository, where anyone can open one.
 
-### Review a change by planning it
+`check` validates every stack (`fmt`, `init -backend=false`, `validate`) and
+every manifest Argo CD syncs (`kubeconform`, strict, CRDs included). It needs no
+credentials, so it is also what is safe on a pull request from a fork. It is the
+required status check.
 
-Before merging anything under `terraform/`, plan the stacks it touches:
+**CI does not plan** ([0015](docs/adr/0015-plan-locally.md)). It used to plan
+`platform` and nothing else — a gate over a third of the infrastructure that
+read like a gate over all of it. Planning is a local step now:
 
 ```bash
-direnv allow                      # or: set -a; . ./.envrc; set +a
+direnv allow
 tofu -chdir=terraform/platform plan -lock=false
 tofu -chdir=terraform/argocd   plan -lock=false
 tofu -chdir=terraform/grafana  plan -lock=false
 ```
 
-`-lock=false` because a plan does not write state, and taking the lock would
-write a lock object for nothing.
+The cost is stated rather than hidden: this is a habit, and nothing fails if you
+skip it.
 
-This used to run in CI for `platform`, and only `platform` — `argocd` needs an
-administrator kubeconfig and `grafana` a second token, neither of which belongs
-in a workflow anyone can trigger. A gate over one stack that reads like a gate
-over all of them is worse than no gate, so it was removed rather than extended
-([ADR 0015](docs/adr/0015-plan-locally.md)). The cost is that this is a habit
-rather than a check: nothing fails if you skip it.
+**Apply is one step per stack, in dependency order** — not a matrix. The stacks
+are a chain: `argocd` reads the cluster `platform` creates. A matrix asserts
+independence it does not enforce. `terraform/bootstrap` is excluded entirely; it
+needs the full-access Spaces key, which is kept out of CI.
 
-### Rebuilding
+Dependency updates come from Renovate, running as a workflow rather than the
+hosted app. Its reasoning, and the four permissions it turned out to need, are
+in [`.github/workflows/renovate.yml`](.github/workflows/renovate.yml).
 
-[`docs/rebuild.md`](docs/rebuild.md) — what survives a cluster replacement and
-what does not, the ordered procedure for each, and the failures worth expecting.
-It is also the shortest honest description of how the pieces fit.
+## Credentials
 
-## Setting it up
+One environment, `production`, holding everything that can change something: the
+DigitalOcean write token, `readwrite` on the state bucket, and the Grafana
+tokens. It requires a reviewer.
 
-One environment, holding the credentials that can change things:
-
-| Environment | Runs | Holds | Protection |
-|---|---|---|---|
-| `production` | merges to `main` | the write DigitalOcean token, `readwrite` on the state bucket, the Grafana tokens | `main` only (reviewer when public) |
-
-**No workflow that a pull request can trigger holds any infrastructure
-credential.** That is now visible in the file list rather than in an `if:`
-condition: `check.yml` has no `secrets` and no `environment`, and
-`terraform.yml` has no `pull_request` trigger. Simpler than the read-only `plan`
-environment it replaces, and the same guarantee without a second set of tokens
-to keep narrow.
-
-The Renovate workflow needs no secret at all. It runs on `GITHUB_TOKEN`, which
-reaches GitHub and nothing else, and its pull requests arrive with `check`
-**held for approval** — the documented exception to GITHUB_TOKEN raising no
-events. One click per pull request, in exchange for not keeping a credential
-that can write to this repository.
-
-It also needs a repository setting that no amount of `permissions:` can supply:
-**Settings → Actions → General → Workflow permissions → Allow GitHub Actions to
-create and approve pull requests**, which is off by default. Without it Renovate
-does everything except open the pull request, and says so only in a `403` inside
-a run that reports success.
-
-That token cannot write files under `.github/workflows/`, and no permission
-exists to let it: the `permissions:` block has no `workflows` scope. So **action
-versions are bumped by hand.** Renovate still watches them and lists them on its
-dependency dashboard; it just never opens the pull request.
-
-Approving one from the dashboard is the wrong move but a cheap mistake. Ticking
-a checkbox edits the issue and triggers nothing — the next run reads the body,
-attempts the update, and fails to push. Renovate rewrites the dashboard each
-run, so the tick is consumed and nothing retries. Edit the version by hand
-instead, and the entry clears itself once the update is no longer pending.
-
-Three actions are in scope, which is why this is a reasonable trade rather than
-a hole. If that number grows, a GitHub App token can carry `workflows` without a
-long-lived secret, and that is the thing to reach for.
-
-`check` runs `fmt` and `init -backend=false && validate` over **every** stack,
-including `bootstrap`, which CI never applies. It needs no secrets, so it is
-also the part that is safe on a pull request from a fork.
-
-Apply is a single job with one **step per stack, in dependency order** — not a
-matrix. The stacks are a chain rather than a set: `argocd` reads the cluster
-`platform` creates. A matrix asserts independence, does not guarantee ordering,
-and with `fail-fast` disabled would apply `argocd` against a cluster whose own
-apply had just failed. Steps run in file order and stop at the first failure. A
-new stack is a new step, placed by what it depends on. The `plan` job takes its environment
-with `deployment: false`, so it gets the secrets without recording a deployment
-— planning is not deploying, and the environment history stays a list of things
-that actually changed. `plan` runs with `-lock=false` so the
-read-only Spaces key suffices — taking a lock would mean writing a `.tflock`
-object, and plan writes no state.
-
-Each environment needs `DIGITALOCEAN_TOKEN`, `AWS_ACCESS_KEY_ID` and
-`AWS_SECRET_ACCESS_KEY` as environment secrets. Even without protection rules
-the `production` environment earns its place: it is what keeps the write
-credentials out of the pull-request job.
+`.envrc.example` lists what a local operator needs and, for each, why it is
+scoped the way it is. Nothing in CI holds a credential that a pull request can
+reach.
 
 ## Decisions
 
-Every significant choice is recorded in [`docs/adr/`](docs/adr/README.md), with the
-alternatives that were rejected and why. Start there — particularly
-[ADR 0005](docs/adr/0005-gateway-api-envoy-gateway.md), which is the decision that
-drives the most work, and
-[ADR 0012](docs/adr/0012-treat-the-repository-as-publishable.md), which constrains
-all of them: nothing here may depend on the repository staying private.
+Every significant choice is in [`docs/adr/`](docs/adr/README.md), with the
+alternatives that were rejected and the reason. They are append-only:
+superseded, not edited, so the record includes the times a decision turned out
+to be wrong.
+
+Two shape everything else —
+[0012](docs/adr/0012-treat-the-repository-as-publishable.md), which forbids any
+design that depends on this repository staying private, and
+[0007](docs/adr/0007-secrets-sealed-secrets.md), whose rule that a sealed value
+is never its own only copy is what makes losing the cluster survivable.
+
+## Reading it
+
+[`docs/reading-guide.md`](docs/reading-guide.md) — how this was built, including
+how much of it was written by an AI agent and what that changed, with pull
+requests worth reading if you are evaluating the work rather than running it.
 
 ## Status
 
-Design agreed; build-out tracked in
-[issues](https://github.com/shogotsuneto/heptapedal-infra/issues), grouped by
-phase into [milestones](https://github.com/shogotsuneto/heptapedal-infra/milestones).
+Live and serving. Build-out is tracked in
+[issues](https://github.com/shogotsuneto/heptapedal-infra/issues) grouped into
+[milestones](https://github.com/shogotsuneto/heptapedal-infra/milestones);
+phases 1 through 5 are complete apart from one console setting.
