@@ -32,8 +32,11 @@ on:
         default: info
         options: [info, debug]
 
+# Renovate opens branches and pull requests as this repository's own token, so
+# the job needs to write both. Nothing here reaches infrastructure.
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
 
 concurrency:
   group: renovate
@@ -47,12 +50,26 @@ jobs:
 
       - uses: renovatebot/github-action@v46.2.6
         env:
-          # Not GITHUB_TOKEN. Pull requests opened with it do not trigger
-          # other workflows, so `check` would never run on the pull requests
-          # that most need it — and since CI no longer plans (ADR 0015), `fmt`
-          # and `validate` are the whole of what CI can say about a bump before
-          # someone plans it locally. A fine-grained token on this repository
-          # with contents and pull-requests write is enough.
-          RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+          # GITHUB_TOKEN, which costs a click per pull request rather than a
+          # long-lived credential.
+          #
+          # Events raised by GITHUB_TOKEN generally start no workflow, to stop
+          # a workflow triggering itself. Pull requests are the documented
+          # exception: `opened`, `synchronize` and `reopened` do create runs,
+          # held in an **approval-required** state until someone with write
+          # access selects "Approve workflows to run". So `check` runs on
+          # Renovate's pull requests — after a deliberate click.
+          #
+          # That click is the trade. A personal access token would remove it
+          # and add a credential with contents and pull-requests write to keep
+          # and rotate; this repository has consistently preferred fewer
+          # credentials, and "awaiting approval" is a visible state rather than
+          # a silently missing check.
+          #
+          # One real limitation: scoped to this repository, Renovate cannot
+          # always fetch release notes from the projects it is bumping, so pull
+          # request bodies are thinner. GITHUB_COM_TOKEN would restore that, at
+          # the cost of the credential this avoids.
+          RENOVATE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RENOVATE_REPOSITORIES: ${{ github.repository }}
           LOG_LEVEL: ${{ inputs.log_level || 'info' }}
