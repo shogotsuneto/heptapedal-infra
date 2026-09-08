@@ -47,33 +47,9 @@ comparison *filters* rather than returning a truth value, so
 `replicas_available < 1` breaches with the value `0`, and a `> 0` threshold on
 that is false. **The alert for the site being down could never have fired.**
 
-**[#95](https://github.com/shogotsuneto/heptapedal-infra/pull/95) — one schedule, because two disagreed.** "Will the pending update
-appear on Monday?" It would not have: the cron fired at 13:00 UTC, which is
-06:00 in Vancouver, and the tool's own schedule was `before 6am` — a window that
-closes at 06:00. Two schedules set to the same moment never overlap.
-
 **[#102](https://github.com/shogotsuneto/heptapedal-infra/pull/102) / [#103](https://github.com/shogotsuneto/heptapedal-infra/pull/103) — the required check.** "That job only runs on
 Terraform paths, doesn't it?" It did, so requiring it would have left every
 documentation pull request waiting forever on a status that never arrives.
-
-### Where a measurement overturned an assumption
-
-**[#71](https://github.com/shogotsuneto/heptapedal-infra/pull/71) — the load balancer idle timeout was never ours to set.** A
-connection surviving 70 seconds and dying by 610 was read as proof the
-600-second setting worked. It bounds the timeout to (70, 610] and proves nothing
-about 600 — the number came from the configuration, not the observation. The API
-settled it: a `REGIONAL_NETWORK` balancer forwards plain TCP and has no HTTP
-layer to hold an HTTP idle timeout.
-
-**[#86](https://github.com/shogotsuneto/heptapedal-infra/pull/86) — projected usage replaced with metered.** Including a question
-that straddled a free-tier allowance: are init containers billed? The metered
-rate is 971.21 container hours a day, which is 40.5 containers; the cluster runs
-40, with 15 init containers beside them. They are not.
-
-**[#83](https://github.com/shogotsuneto/heptapedal-infra/pull/83) — the latency panel asked Loki for a series per request.** A bare
-`| json` promotes every parsed field to a label, `trace_id` included. Three
-panels survived only because `sum by (...)` discarded the explosion — **they were
-never correct, only hidden.**
 
 ### Where ordering was the whole problem
 
@@ -103,23 +79,6 @@ worse than no gate. This adopts an alternative
 [ADR 0012](adr/0012-treat-the-repository-as-publishable.md) had explicitly
 rejected, so it needed [an ADR of its own](adr/0015-plan-locally.md).
 
-### Where each failure hid the next
-
-**[#89](https://github.com/shogotsuneto/heptapedal-infra/pull/89) → [#96](https://github.com/shogotsuneto/heptapedal-infra/pull/96) → [#97](https://github.com/shogotsuneto/heptapedal-infra/pull/97) → [#98](https://github.com/shogotsuneto/heptapedal-infra/pull/98).** Getting Renovate
-to open one pull request took four attempts, because each missing permission was
-only reachable once the previous one was granted — and **not one of the errors
-named a permission**:
-
-| Missing | Reported as |
-|---|---|
-| `issues` | a `FORBIDDEN` on a GraphQL field |
-| `statuses` (read) | `integration-unauthorized` |
-| `statuses` (write) | `repository-changed` |
-| *(a repository setting, not a permission)* | `403` on the final call |
-
-Every one of those runs **reported success**, because the tool logs these at
-`WARN` and exits non-zero only on `ERROR`.
-
 ### Where a decision was made about credentials
 
 **[#77](https://github.com/shogotsuneto/heptapedal-infra/pull/77) — keep Supabase awake from the cluster.** Moved out of GitHub
@@ -128,10 +87,24 @@ value. The opposite decision was made for Renovate ([#87](https://github.com/sho
 difference is written down: what a missed run costs, and whether the thing being
 automated acts on this repository.
 
-**[#78](https://github.com/shogotsuneto/heptapedal-infra/pull/78) — a grant, not only a policy.** An RLS policy without a table
-grant denies everything. Postgres returned the exact statement that fixed it,
-which is better than any message written in advance — so the job now points at
-the response body instead of competing with it.
+**And the one that shaped the rest, back in [#27](https://github.com/shogotsuneto/heptapedal-infra/pull/27).** The first draft of
+[ADR 0007](adr/0007-secrets-sealed-secrets.md) said to back up the Sealed
+Secrets controller's private keys out of band, which is the conventional advice.
+It was reversed during review — the commit is `drop the Sealed Secrets key
+backup for an invariant instead` — on the grounds that to protect values that
+exist nowhere but their ciphertext, a backup puts *every* secret behind one
+unmanaged, unrotated plaintext copy of keys that open ciphertext this repository
+publishes.
+
+What replaced it is a rule rather than a duty: **the ciphertext is never a
+value's only copy.** Every sealed value is retrievable or reissuable from the
+service that owns it, and anything that is not gets a home *before* it is
+sealed. That is checkable in review, where "remember to take a backup" is not.
+
+It is also load-bearing three layers down. Losing the cluster means every sealed
+value in git becomes undecryptable at once — which is survivable only because of
+that rule, and is why [`rebuild.md`](rebuild.md) can describe resealing five
+secrets as a step rather than as a disaster.
 
 ### If you want to see the shape of a stack
 
