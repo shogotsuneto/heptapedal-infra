@@ -8,6 +8,22 @@
     "config:best-practices",
   ],
 
+  // `config:best-practices` also pins to digests, which does not suit this
+  // repository in either place it applies.
+  //
+  // For actions it is unreachable: GITHUB_TOKEN cannot write
+  // .github/workflows/, so the pin pull request can never be pushed. Left on,
+  // it sits on the dependency dashboard permanently as an approval that always
+  // fails — a to-do nobody can clear. It would also change bumping actions from
+  // a yearly edit to one per release, which is a poor pairing with having
+  // chosen to bump them by hand.
+  //
+  // For images it is reachable, and declined for readability: a digest beside
+  // the tag is noise in a manifest people read, and it adds a pull request every
+  // time the same tag is rebuilt. The tag is already an immutable release from a
+  // known publisher, which is the property ADR 0011 asks for.
+  pinDigests: false,
+
   // Weekly rather than daily. Pins here rot over months, not hours, and a bot
   // that opens something every morning is a bot people stop reading.
   schedule: ["before 6am on Monday"],
