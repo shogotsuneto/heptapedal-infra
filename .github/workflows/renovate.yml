@@ -12,6 +12,14 @@
 # natural place for the thing that proposes it — where the keepalive suggested
 # nothing and merely had to keep happening.
 #
+# One prerequisite is a repository setting rather than anything in this file:
+# Settings -> Actions -> General -> Workflow permissions ->
+# **Allow GitHub Actions to create and approve pull requests**. It is off by
+# default, and without it `POST /pulls` returns 403 with "GitHub Actions is not
+# permitted to create or approve pull requests" — after Renovate has resolved
+# the update, written the files and pushed the branch. Everything works except
+# the last step, and the run still reports success.
+#
 # The cost of that choice is the 60-day rule: scheduled workflows are disabled
 # after 60 days without repository activity on a public repository, and this one
 # is meant to become public. Renovate opening pull requests is itself activity,

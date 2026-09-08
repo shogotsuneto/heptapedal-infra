@@ -97,6 +97,12 @@ reaches GitHub and nothing else, and its pull requests arrive with `check`
 events. One click per pull request, in exchange for not keeping a credential
 that can write to this repository.
 
+It also needs a repository setting that no amount of `permissions:` can supply:
+**Settings → Actions → General → Workflow permissions → Allow GitHub Actions to
+create and approve pull requests**, which is off by default. Without it Renovate
+does everything except open the pull request, and says so only in a `403` inside
+a run that reports success.
+
 That token cannot write files under `.github/workflows/`, and no permission
 exists to let it: the `permissions:` block has no `workflows` scope. So **action
 versions are bumped by hand.** Renovate still watches them and lists them on its
