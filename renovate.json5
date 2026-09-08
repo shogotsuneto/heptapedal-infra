@@ -50,7 +50,21 @@
       separateMinorPatch: true,
     },
     {
+      // Detected, listed, never opened. GITHUB_TOKEN may not write files under
+      // .github/workflows/ — there is no `workflows` scope in a workflow's
+      // `permissions:` block to grant — so Renovate would build the branch and
+      // fail to push it, every week, until someone intervened.
+      //
+      // Approval-gated instead: the update appears on the dependency dashboard
+      // and nothing is attempted. That keeps the one thing worth keeping, which
+      // is being told an action moved; the edit itself is three files and no
+      // judgement.
+      //
+      // Do not tick the checkbox. Approving one makes Renovate try, and it will
+      // fail for the reason above. Bump the version by hand and the entry
+      // disappears on the next run.
       matchManagers: ["github-actions"],
+      dependencyDashboardApproval: true,
       groupName: "github actions",
     },
     {
@@ -59,8 +73,10 @@
     },
     {
       // Patches to things that cannot break a running cluster. Batched, because
-      // reviewing them one at a time is how a bot becomes noise.
-      matchManagers: ["github-actions", "terraform"],
+      // reviewing them one at a time is how a bot becomes noise. Actions are
+      // absent here deliberately — they are dashboard-only above, and grouping
+      // them into a pull request that cannot be pushed would defeat that.
+      matchManagers: ["terraform"],
       matchUpdateTypes: ["patch"],
       groupName: "patch updates",
       automerge: false,

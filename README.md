@@ -97,6 +97,17 @@ reaches GitHub and nothing else, and its pull requests arrive with `check`
 events. One click per pull request, in exchange for not keeping a credential
 that can write to this repository.
 
+That token cannot write files under `.github/workflows/`, and no permission
+exists to let it: the `permissions:` block has no `workflows` scope. So **action
+versions are bumped by hand.** Renovate still watches them and lists them on its
+dependency dashboard; it just never opens the pull request. Do not approve one
+from the dashboard — it would try, and fail. Edit the version, and the entry
+clears itself on the next run.
+
+Three actions are in scope, which is why this is a reasonable trade rather than
+a hole. If that number grows, a GitHub App token can carry `workflows` without a
+long-lived secret, and that is the thing to reach for.
+
 `check` runs `fmt` and `init -backend=false && validate` over **every** stack,
 including `bootstrap`, which CI never applies. It needs no secrets, so it is
 also the part that is safe on a pull request from a fork.
