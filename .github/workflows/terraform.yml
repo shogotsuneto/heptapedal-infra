@@ -1,17 +1,15 @@
-# Plan on pull request, apply on merge.
+# Validate on pull request, apply on merge.
 #
-# Two things from ADR 0012 (the repository must be safe to make public) shape
-# this workflow:
+# CI does not plan. It planned `platform` and nothing else — `argocd` needs an
+# administrator kubeconfig and `grafana` a second token, both of which the
+# read-only plan environment existed to avoid — so the plan comment was a gate
+# over a third of the infrastructure while reading like a gate over all of it.
+# The reviewer plans locally instead, which covers every stack; see ADR 0015 and
+# the root README.
 #
-#   * The plan *artifact* never leaves the job. `-out` and `show -json` carry
-#     every value unredacted, `sensitive` included, so nothing is handed between
-#     jobs or uploaded. Merging re-plans rather than replaying a reviewed plan —
-#     a small divergence traded for never persisting a credential-bearing file.
-#   * Rendered plan text is public, and accepted as such. It is masked
-#     best-effort before posting: hygiene, not a boundary.
-#
-# `terraform/bootstrap` is deliberately absent. It needs the full-access Spaces
-# key, which is kept out of CI, and it is applied roughly once by hand.
+# `terraform/bootstrap` is deliberately absent from apply too. It needs the
+# full-access Spaces key, which is kept out of CI, and it is applied roughly
+# once by hand.
 #
 # Excluding it also means CI cannot build the platform from nothing; the rebuild
 # runbook (#24) does that by hand. What CI does handle is the ordering between
@@ -24,14 +22,12 @@ on:
     paths:
       - terraform/**
       - .github/workflows/terraform.yml
-      - .github/scripts/plan-comment.sh
       - .tool-versions
   push:
     branches: [main]
     paths:
       - terraform/**
       - .github/workflows/terraform.yml
-      - .github/scripts/plan-comment.sh
       - .tool-versions
 
 permissions:
@@ -78,72 +74,6 @@ jobs:
             tofu -chdir="${dir}" validate
             echo "::endgroup::"
           done
-
-  plan:
-    needs: version
-    # ADR 0012 clause 5: a workflow holding credentials never runs against a
-    # fork's code.
-    if: >-
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    # Read-only DigitalOcean token, read-only Spaces key. A workflow anyone can
-    # trigger by opening a pull request should not hold credentials that can
-    # change anything.
-    #
-    # `deployment: false` takes the environment for its secrets without
-    # recording a deployment: planning is not deploying, and every pull request
-    # logging one buries the entries that are.
-    environment:
-      name: plan
-      deployment: false
-    permissions:
-      contents: read
-      pull-requests: write
-    # Only `platform`. Planning `argocd` would need `kubernetes:access_cluster`,
-    # which returns an administrator kubeconfig — and this environment's whole
-    # point is holding credentials that cannot change anything. `argocd` is
-    # validated without credentials in `check`, and planned by its apply run.
-    env:
-      DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: opentofu/setup-opentofu@v2
-        with:
-          tofu_version: ${{ needs.version.outputs.tofu }}
-          tofu_wrapper: false
-
-      - run: tofu init -input=false
-        working-directory: terraform/platform
-
-      - run: tofu validate
-        working-directory: terraform/platform
-
-      # -lock=false is what lets the read-only Spaces key suffice: taking a lock
-      # would mean writing a .tflock object. Safe — plan does not write state.
-      - name: Plan
-        id: plan
-        working-directory: terraform/platform
-        run: |
-          set +e
-          tofu plan -input=false -lock=false -no-color -detailed-exitcode > plan.txt 2>&1
-          echo "exitcode=$?" >> "$GITHUB_OUTPUT"
-          cat plan.txt
-
-      - name: Comment
-        working-directory: terraform/platform
-        env:
-          GH_TOKEN: ${{ github.token }}
-          STACK: platform
-          EXITCODE: ${{ steps.plan.outputs.exitcode }}
-          PR: ${{ github.event.pull_request.number }}
-        run: "$GITHUB_WORKSPACE/.github/scripts/plan-comment.sh"
-
-      - name: Fail if the plan errored
-        if: steps.plan.outputs.exitcode == '1'
-        run: exit 1
 
   apply:
     needs: version

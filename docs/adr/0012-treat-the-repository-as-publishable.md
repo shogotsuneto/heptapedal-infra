@@ -1,6 +1,7 @@
 # 0012. Treat this repository as publishable
 
-- **Status:** Accepted
+- **Status:** Accepted; the decision to render plans in public CI is superseded
+  by [0015](0015-plan-locally.md)
 - **Date:** 2026-08-29
 
 ## Context
