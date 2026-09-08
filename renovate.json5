@@ -64,6 +64,20 @@
     managerFilePatterns: ["/^gitops/.+\\.yaml$/"],
   },
 
+  // The asdf manager reads .tool-versions and knows opentofu, but not
+  // kubeconform — so that line would sit there unproposed, which is the exact
+  // thing this configuration exists to prevent. One regex closes it.
+  customManagers: [
+    {
+      customType: "regex",
+      managerFilePatterns: ["/^\\.tool-versions$/"],
+      matchStrings: ["kubeconform (?<currentValue>\\S+)"],
+      depNameTemplate: "yannh/kubeconform",
+      datasourceTemplate: "github-releases",
+      extractVersionTemplate: "^v(?<version>.*)$",
+    },
+  ],
+
   packageRules: [
     {
       // Our own charts are deliberately out of scope. Their release timing is
