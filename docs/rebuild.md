@@ -143,9 +143,15 @@ Outside all of it, and easy to forget because nothing here fails without them:
 - **GitHub** — repository secrets and variables, and *Allow GitHub Actions to
   create and approve pull requests*, which is off by default.
 
-**This has not been done end to end.** The claim that it works is a reading of
-the parts, not a test of the whole. Doing it into a scratch project, and timing
-it, is the remaining item on #24.
+**This has not been done end to end, and there is no plan to rehearse it.** The
+order above is derived from what reads what, not observed — so treat it as a
+sequence that should work rather than one that has.
+
+Rehearsing into a scratch project was considered and declined: it costs a second
+of everything, and the version of this worth having is a record of a real
+rebuild rather than of a dress rehearsal. **If you are reading this because you
+are actually rebuilding, correct it as you go** — that pass is the one that
+turns this from a reading into a record.
 
 ## Restoring the database
 
