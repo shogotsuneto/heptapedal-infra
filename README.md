@@ -45,7 +45,9 @@ point reconciles from `gitops/`. See [ADR 0006](docs/adr/0006-gitops-argo-cd-app
 
 ## Continuous integration
 
-`check` on every pull request, `apply` on merge to `main`. **Planning is a local
+`check` on every pull request, `apply` on merge to `main` — **two workflows, so
+the boundary is structural**: `check.yml` declares no secrets and no
+environment, `terraform.yml` never runs on a pull request at all. **Planning is a local
 step, not a CI one** ([ADR 0015](docs/adr/0015-plan-locally.md)).
 `terraform/bootstrap` is excluded from apply too: it needs the full-access
 Spaces key, which is deliberately kept out of CI.
@@ -92,10 +94,11 @@ One environment, holding the credentials that can change things:
 | `production` | merges to `main` | the write DigitalOcean token, `readwrite` on the state bucket, the Grafana tokens | `main` only (reviewer when public) |
 
 **No workflow that a pull request can trigger holds any infrastructure
-credential.** `check` needs none, so it is also the part that is safe on a pull
-request from a fork. That is simpler than the read-only `plan` environment it
-replaces, and it is the same guarantee without a second set of tokens to keep
-narrow.
+credential.** That is now visible in the file list rather than in an `if:`
+condition: `check.yml` has no `secrets` and no `environment`, and
+`terraform.yml` has no `pull_request` trigger. Simpler than the read-only `plan`
+environment it replaces, and the same guarantee without a second set of tokens
+to keep narrow.
 
 The Renovate workflow needs no secret at all. It runs on `GITHUB_TOKEN`, which
 reaches GitHub and nothing else, and its pull requests arrive with `check`

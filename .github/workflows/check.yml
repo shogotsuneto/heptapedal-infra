@@ -1,0 +1,87 @@
+# Everything that can be verified without a credential.
+#
+# Its own file, and that is the point rather than tidiness: this workflow holds
+# no secrets and declares no environment, so "nothing a pull request can trigger
+# can change anything" is a property of the file rather than of an `if:`
+# condition inside a larger one. On a public repository, where anyone can open a
+# pull request, that is worth being able to see at a glance.
+#
+# It is also the required status check, which is why there is no `paths` filter:
+# a required check that does not run leaves a pull request waiting for a status
+# that never arrives, so every documentation change would be unmergeable.
+name: check
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      tofu: ${{ steps.read.outputs.tofu }}
+      kubeconform: ${{ steps.read.outputs.kubeconform }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: read
+        run: |
+          {
+            echo "tofu=$(awk '/^opentofu /{print $2}' .tool-versions)"
+            echo "kubeconform=$(awk '/^kubeconform /{print $2}' .tool-versions)"
+          } >> "$GITHUB_OUTPUT"
+
+  # Covers every stack, including the two CI never applies: bootstrap, which is
+  # run by hand, and — since ADR 0015 — everything else, because CI no longer
+  # plans at all. `init -backend=false` skips the state backend, which is what
+  # lets this catch syntax and provider-schema errors while touching nothing and
+  # holding nothing.
+  check:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: opentofu/setup-opentofu@v2
+        with:
+          tofu_version: ${{ needs.version.outputs.tofu }}
+          tofu_wrapper: false
+
+      - run: tofu fmt -check -recursive -diff terraform/
+
+      - name: Validate every stack
+        run: |
+          for dir in terraform/*/; do
+            echo "::group::${dir}"
+            tofu -chdir="${dir}" init -backend=false -input=false >/dev/null
+            tofu -chdir="${dir}" validate
+            echo "::endgroup::"
+          done
+
+      # The same idea for what Terraform does not cover. Until now nothing
+      # checked `gitops/` at all, and a mistake there surfaced when Argo CD
+      # tried to sync it — which is late, and on the cluster.
+      #
+      # `-strict` is what gives this teeth: without it, unknown fields are
+      # allowed and a misspelt `targetRevision` validates happily. With it, a
+      # typo and a string where an integer belongs are both caught here.
+      #
+      # `-ignore-missing-schemas` is deliberately *not* set. It would skip any
+      # resource whose schema could not be found, which means adding a new CRD
+      # would silently validate nothing — the failure mode this job exists to
+      # remove. A new kind failing until its schema is available is the honest
+      # behaviour.
+      - name: Validate the manifests Argo CD syncs
+        env:
+          VERSION: ${{ needs.version.outputs.kubeconform }}
+        run: |
+          curl -sSL "https://github.com/yannh/kubeconform/releases/download/v${VERSION}/kubeconform-linux-amd64.tar.gz" \
+            | tar xz kubeconform
+          ./kubeconform -strict -summary \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            $(find gitops -name '*.yaml')
