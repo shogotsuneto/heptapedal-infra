@@ -51,6 +51,31 @@ that is false. **The alert for the site being down could never have fired.**
 Terraform paths, doesn't it?" It did, so requiring it would have left every
 documentation pull request waiting forever on a status that never arrives.
 
+### Where a decision was made about credentials
+
+**[#77](https://github.com/shogotsuneto/heptapedal-infra/pull/77) — keep Supabase awake from the cluster.** Moved out of GitHub
+Actions for two reasons that are both about not keeping a second copy of a
+value. The opposite decision was made for Renovate ([#87](https://github.com/shogotsuneto/heptapedal-infra/pull/87)), and the
+difference is written down: what a missed run costs, and whether the thing being
+automated acts on this repository.
+
+**And the one that shaped the rest, back in [#27](https://github.com/shogotsuneto/heptapedal-infra/pull/27).** The first draft of
+[ADR 0007](adr/0007-secrets-sealed-secrets.md) took the conventional advice and
+backed up the Sealed Secrets controller's private keys. It was reversed during
+review — the commit is `drop the Sealed Secrets key backup for an invariant
+instead` — because a backup protects ciphertext by creating one unmanaged
+plaintext copy of the keys that open all of it, this repository's published
+ciphertext included.
+
+What replaced it is a rule rather than a duty: **the ciphertext is never a
+value's only copy.** Every sealed value is reissuable from the service that owns
+it, and anything that is not gets a home before it is sealed — checkable in
+review, where "remember to take a backup" is not.
+
+It still carries weight three layers down. Losing the cluster makes every sealed
+value in git undecryptable at once, and only that rule is why
+[`rebuild.md`](rebuild.md) describes resealing as a step rather than a disaster.
+
 ### Where ordering was the whole problem
 
 **[#55](https://github.com/shogotsuneto/heptapedal-infra/pull/55) — SealedSecrets need `SkipDryRunOnMissingResource` too.** Argo CD
@@ -78,33 +103,6 @@ gate over a third of the infrastructure that reads like a gate over all of it is
 worse than no gate. This adopts an alternative
 [ADR 0012](adr/0012-treat-the-repository-as-publishable.md) had explicitly
 rejected, so it needed [an ADR of its own](adr/0015-plan-locally.md).
-
-### Where a decision was made about credentials
-
-**[#77](https://github.com/shogotsuneto/heptapedal-infra/pull/77) — keep Supabase awake from the cluster.** Moved out of GitHub
-Actions for two reasons that are both about not keeping a second copy of a
-value. The opposite decision was made for Renovate ([#87](https://github.com/shogotsuneto/heptapedal-infra/pull/87)), and the
-difference is written down: what a missed run costs, and whether the thing being
-automated acts on this repository.
-
-**And the one that shaped the rest, back in [#27](https://github.com/shogotsuneto/heptapedal-infra/pull/27).** The first draft of
-[ADR 0007](adr/0007-secrets-sealed-secrets.md) said to back up the Sealed
-Secrets controller's private keys out of band, which is the conventional advice.
-It was reversed during review — the commit is `drop the Sealed Secrets key
-backup for an invariant instead` — on the grounds that to protect values that
-exist nowhere but their ciphertext, a backup puts *every* secret behind one
-unmanaged, unrotated plaintext copy of keys that open ciphertext this repository
-publishes.
-
-What replaced it is a rule rather than a duty: **the ciphertext is never a
-value's only copy.** Every sealed value is retrievable or reissuable from the
-service that owns it, and anything that is not gets a home *before* it is
-sealed. That is checkable in review, where "remember to take a backup" is not.
-
-It is also load-bearing three layers down. Losing the cluster means every sealed
-value in git becomes undecryptable at once — which is survivable only because of
-that rule, and is why [`rebuild.md`](rebuild.md) can describe resealing five
-secrets as a step rather than as a disaster.
 
 ### If you want to see the shape of a stack
 
