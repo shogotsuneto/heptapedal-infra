@@ -1,0 +1,73 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+
+  extends: [
+    "config:recommended",
+    // Wait for a version to have been out a few days. Nothing here is urgent,
+    // and a released-then-yanked chart is a real thing.
+    "config:best-practices",
+  ],
+
+  // Weekly rather than daily. Pins here rot over months, not hours, and a bot
+  // that opens something every morning is a bot people stop reading.
+  schedule: ["before 6am on Monday"],
+  timezone: "America/Vancouver",
+
+  prConcurrentLimit: 5,
+  prHourlyLimit: 0,
+
+  // Argo CD Application manifests have no naming convention, so Renovate
+  // matches none of them unless told where they are.
+  argocd: {
+    managerFilePatterns: ["/^gitops/.+\\.yaml$/"],
+  },
+
+  // Container images inside plain Kubernetes manifests — the keepalive CronJob.
+  kubernetes: {
+    managerFilePatterns: ["/^gitops/.+\\.yaml$/"],
+  },
+
+  packageRules: [
+    {
+      // Our own charts are deliberately out of scope. Their release timing is
+      // ours and already deliberate — 0.2.0, 0.2.1 and 0.2.2 were each bumped
+      // here on purpose, with a reason — so a suggestion adds nothing. Leaving
+      // them out also means Renovate needs no GHCR credential, and the token
+      // #10 sealed into the cluster gains no third copy.
+      matchPackageNames: [
+        "ghcr.io/shogotsuneto/charts/heptapedal-app",
+        "ghcr.io/shogotsuneto/charts/heptapedal-embeddings",
+      ],
+      enabled: false,
+    },
+    {
+      // The point of the whole exercise: third-party charts, which nobody here
+      // is watching.
+      matchManagers: ["argocd"],
+      groupName: "platform charts",
+      // Kept separate from the group so a chart's own release notes are read
+      // rather than skimmed as one of five.
+      separateMinorPatch: true,
+    },
+    {
+      matchManagers: ["github-actions"],
+      groupName: "github actions",
+    },
+    {
+      matchManagers: ["terraform"],
+      groupName: "terraform providers",
+    },
+    {
+      // Patches to things that cannot break a running cluster. Batched, because
+      // reviewing them one at a time is how a bot becomes noise.
+      matchManagers: ["github-actions", "terraform"],
+      matchUpdateTypes: ["patch"],
+      groupName: "patch updates",
+      automerge: false,
+    },
+  ],
+
+  // Where a chart pins an appVersion, say so in the PR body — the chart bump is
+  // rarely the change that matters.
+  commitMessagePrefix: "chore(deps):",
+}

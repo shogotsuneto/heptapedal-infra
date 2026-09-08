@@ -1,0 +1,57 @@
+# Propose the version bumps this repository pins.
+#
+# Everything here is pinned on purpose — chart versions, provider constraints,
+# action versions, the OpenTofu release. Pinning without something proposing the
+# bump is not caution, it is falling behind quietly.
+#
+# Run here rather than through the hosted app, unlike the Supabase keepalive
+# which went the other way. The difference is what a missed run costs. A missed
+# keepalive is a login outage a few days later, so it belongs somewhere that
+# does not stop; a missed bump is a week of not hearing about a patch release.
+# And a bump is a change *to this repository*, which makes the repository the
+# natural place for the thing that proposes it — where the keepalive suggested
+# nothing and merely had to keep happening.
+#
+# The cost of that choice is the 60-day rule: scheduled workflows are disabled
+# after 60 days without repository activity on a public repository, and this one
+# is meant to become public. Renovate opening pull requests is itself activity,
+# so it mostly sustains itself — but a quiet quarter would stop it, and nothing
+# would say so. `workflow_dispatch` is the manual way back.
+name: renovate
+
+on:
+  schedule:
+    # Weekly. Pins here rot over months, and a bot that opens something every
+    # morning is a bot people stop reading.
+    - cron: "0 13 * * 1"
+  workflow_dispatch:
+    inputs:
+      log_level:
+        description: Renovate log level
+        type: choice
+        default: info
+        options: [info, debug]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: renovatebot/github-action@v46.2.6
+        env:
+          # Not GITHUB_TOKEN. Pull requests opened with it do not trigger other
+          # workflows, so the terraform plan — the only thing that would tell
+          # you whether a bump is safe — would never run on the pull requests
+          # that most need it. A fine-grained token on this repository with
+          # contents and pull-requests write is enough.
+          RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          LOG_LEVEL: ${{ inputs.log_level || 'info' }}

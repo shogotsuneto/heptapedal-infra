@@ -91,6 +91,12 @@ request from a fork. That is simpler than the read-only `plan` environment it
 replaces, and it is the same guarantee without a second set of tokens to keep
 narrow.
 
+`RENOVATE_TOKEN` sits outside that environment, as a repository secret: the
+Renovate workflow reaches GitHub and nothing else. It is deliberately not
+`GITHUB_TOKEN` — pull requests opened with that do not trigger other workflows,
+so `check` would never run on the bumps that most need it. A fine-grained token
+on this repository with contents and pull-requests write is enough.
+
 `check` runs `fmt` and `init -backend=false && validate` over **every** stack,
 including `bootstrap`, which CI never applies. It needs no secrets, so it is
 also the part that is safe on a pull request from a fork.
