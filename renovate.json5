@@ -38,10 +38,17 @@
   // applied after top-level options, so the top-level value loses. Not
   // extending the preset is the only thing that actually turns it off.
 
-  // Weekly rather than daily. Pins here rot over months, not hours, and a bot
-  // that opens something every morning is a bot people stop reading.
-  schedule: ["before 6am on Monday"],
-  timezone: "America/Vancouver",
+  // No `schedule` here on purpose. The workflow runs weekly and is the only
+  // thing that invokes Renovate, so it *is* the schedule; a second one inside
+  // Renovate can only ever agree or disagree with it.
+  //
+  // It disagreed. The cron fired at 13:00 UTC, which is 06:00 in Vancouver, and
+  // `before 6am` is a window that closes at 06:00 — so every scheduled run
+  // landed just outside its own schedule and created nothing. GitHub also runs
+  // cron late rather than early, which made it worse rather than marginal.
+  //
+  // One schedule cannot disagree with itself. It also makes a manual run do
+  // what running something manually should do: open the pull requests now.
 
   prConcurrentLimit: 5,
   prHourlyLimit: 0,

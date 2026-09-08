@@ -21,8 +21,10 @@ name: renovate
 
 on:
   schedule:
-    # Weekly. Pins here rot over months, and a bot that opens something every
-    # morning is a bot people stop reading.
+    # Weekly, and the only schedule there is — renovate.json5 deliberately sets
+    # none, so this cron alone decides when anything is proposed. Pins here rot
+    # over months, and a bot that opens something every morning is a bot people
+    # stop reading.
     - cron: "0 13 * * 1"
   workflow_dispatch:
     inputs:
