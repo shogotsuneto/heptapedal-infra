@@ -47,11 +47,12 @@ jobs:
 
       - uses: renovatebot/github-action@v46.2.6
         env:
-          # Not GITHUB_TOKEN. Pull requests opened with it do not trigger other
-          # workflows, so the terraform plan — the only thing that would tell
-          # you whether a bump is safe — would never run on the pull requests
-          # that most need it. A fine-grained token on this repository with
-          # contents and pull-requests write is enough.
+          # Not GITHUB_TOKEN. Pull requests opened with it do not trigger
+          # other workflows, so `check` would never run on the pull requests
+          # that most need it — and since CI no longer plans (ADR 0015), `fmt`
+          # and `validate` are the whole of what CI can say about a bump before
+          # someone plans it locally. A fine-grained token on this repository
+          # with contents and pull-requests write is enough.
           RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
           RENOVATE_REPOSITORIES: ${{ github.repository }}
           LOG_LEVEL: ${{ inputs.log_level || 'info' }}
