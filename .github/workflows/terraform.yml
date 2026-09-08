@@ -18,11 +18,16 @@
 name: terraform
 
 on:
+  # No path filter on pull requests, deliberately. `check` is meant to be a
+  # required status check, and a required check that does not run leaves the
+  # pull request waiting for a status that will never arrive — so every
+  # documentation change would be unmergeable. It needs no credentials and
+  # takes about fifteen seconds, so running it on everything costs nothing
+  # worth filtering for.
+  #
+  # `push` keeps its filter: that one triggers `apply`, and there is no reason
+  # to re-apply four stacks because a README changed.
   pull_request:
-    paths:
-      - terraform/**
-      - .github/workflows/terraform.yml
-      - .tool-versions
   push:
     branches: [main]
     paths:
