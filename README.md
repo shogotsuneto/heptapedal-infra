@@ -91,6 +91,12 @@ request from a fork. That is simpler than the read-only `plan` environment it
 replaces, and it is the same guarantee without a second set of tokens to keep
 narrow.
 
+The Renovate workflow needs no secret at all. It runs on `GITHUB_TOKEN`, which
+reaches GitHub and nothing else, and its pull requests arrive with `check`
+**held for approval** — the documented exception to GITHUB_TOKEN raising no
+events. One click per pull request, in exchange for not keeping a credential
+that can write to this repository.
+
 `check` runs `fmt` and `init -backend=false && validate` over **every** stack,
 including `bootstrap`, which CI never applies. It needs no secrets, so it is
 also the part that is safe on a pull request from a fork.
