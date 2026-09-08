@@ -1,0 +1,24 @@
+# Configuration for `gitleaks git . --log-opts="--all"`, which is the pre-publish
+# scan ADR 0012 clause 7 asks for.
+#
+# Without this, a scan reports eight findings and every one of them is a
+# SealedSecret's ciphertext. That is not a false positive in the usual sense —
+# they are genuinely high-entropy secrets — but they are secrets that are
+# *supposed* to be committed, which is the entire premise of ADR 0007. Left
+# unfiltered they would be the whole result, and a scan whose output is known
+# noise is a scan nobody reads.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+  [rules.allowlist]
+  description = """
+    Sealed Secrets ciphertext. Encrypted to a key that exists only inside the
+    cluster and is deliberately never backed up, so committing it is the design
+    rather than a mistake. The plaintext of each is recoverable from the service
+    that owns it — see gitops/README.md.
+  """
+  paths = ['''\.sealed\.yaml$''']
+  regexes = ['''Ag[A-Za-z0-9+/=]{100,}''']
