@@ -46,6 +46,13 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  # Renovate reads a branch's commit status before deciding what to do with it,
+  # through both the statuses and check-runs APIs. Without these it creates the
+  # branch, gets 403 on GET /commits/{sha}/statuses, and aborts the whole
+  # repository with `integration-unauthorized` — logged at WARN, so the workflow
+  # still reports success while having done nothing.
+  statuses: read
+  checks: read
 
 concurrency:
   group: renovate
