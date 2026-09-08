@@ -45,43 +45,51 @@ point reconciles from `gitops/`. See [ADR 0006](docs/adr/0006-gitops-argo-cd-app
 
 ## Continuous integration
 
-`plan` on every pull request, `apply` on merge to `main`.
-`terraform/bootstrap` is excluded: it needs the full-access Spaces key, which is
-deliberately kept out of CI.
+`check` on every pull request, `apply` on merge to `main`. **Planning is a local
+step, not a CI one** ([ADR 0015](docs/adr/0015-plan-locally.md)).
+`terraform/bootstrap` is excluded from apply too: it needs the full-access
+Spaces key, which is deliberately kept out of CI.
 
 **Merging applies.** GitHub reserves environment protection rules — required
 reviewers, wait timers — for public repositories on this plan, so while this
-repository is private there is no approval step between merge and apply. The
-review gate is the pull request and the plan comment on it; merging is the
-deliberate act. Turning the reviewer on is part of going public (#28).
+repository is private there is no approval step between merge and apply.
+Merging is the deliberate act. Turning the reviewer on is part of going public
+(#28).
 
-Nothing hands a plan **artifact** between jobs. `-out` and `show -json` contain
-every value unredacted, `sensitive` included, so merging re-plans rather than
-replaying the reviewed plan — a small divergence traded for never persisting a
-credential-bearing file
-([ADR 0012](docs/adr/0012-treat-the-repository-as-publishable.md)). Rendered
-plan text is posted to the pull request with identifiers masked, which is
-hygiene rather than a boundary; the map is accepted as public.
+### Review a change by planning it
+
+Before merging anything under `terraform/`, plan the stacks it touches:
+
+```bash
+direnv allow                      # or: set -a; . ./.envrc; set +a
+tofu -chdir=terraform/platform plan -lock=false
+tofu -chdir=terraform/argocd   plan -lock=false
+tofu -chdir=terraform/grafana  plan -lock=false
+```
+
+`-lock=false` because a plan does not write state, and taking the lock would
+write a lock object for nothing.
+
+This used to run in CI for `platform`, and only `platform` — `argocd` needs an
+administrator kubeconfig and `grafana` a second token, neither of which belongs
+in a workflow anyone can trigger. A gate over one stack that reads like a gate
+over all of them is worse than no gate, so it was removed rather than extended
+([ADR 0015](docs/adr/0015-plan-locally.md)). The cost is that this is a habit
+rather than a check: nothing fails if you skip it.
 
 ### Setting it up
 
-Two environments, holding credentials with deliberately different power:
+One environment, holding the credentials that can change things:
 
-| Environment | Runs | DigitalOcean token | Spaces key | Protection |
-|---|---|---|---|---|
-| `plan` | pull requests | `*:read` scopes only, no `kubernetes:access_cluster` | `read` on the state bucket | none |
-| `production` | merges to `main` | the write token | `readwrite` on the state bucket | `main` only (reviewer when public) |
+| Environment | Runs | Holds | Protection |
+|---|---|---|---|
+| `production` | merges to `main` | the write DigitalOcean token, `readwrite` on the state bucket, the Grafana tokens | `main` only (reviewer when public) |
 
-A workflow that anyone can trigger by opening a pull request therefore holds
-credentials that cannot change anything.
-
-Keeping that true costs one thing: **the `argocd` stack is not planned on pull
-requests.** Planning it needs `kubernetes:access_cluster`, which returns an
-*administrator* kubeconfig — read-only against the DigitalOcean API, but not
-against the cluster it then reaches. Rather than quietly widen the plan
-credentials, that stack is validated without credentials in the `check` job and
-first planned by its own apply run, where the plan is visible before anything
-changes.
+**No workflow that a pull request can trigger holds any infrastructure
+credential.** `check` needs none, so it is also the part that is safe on a pull
+request from a fork. That is simpler than the read-only `plan` environment it
+replaces, and it is the same guarantee without a second set of tokens to keep
+narrow.
 
 `check` runs `fmt` and `init -backend=false && validate` over **every** stack,
 including `bootstrap`, which CI never applies. It needs no secrets, so it is
