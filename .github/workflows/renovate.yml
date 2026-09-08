@@ -73,10 +73,18 @@ jobs:
           # credentials, and "awaiting approval" is a visible state rather than
           # a silently missing check.
           #
-          # One real limitation: scoped to this repository, Renovate cannot
-          # always fetch release notes from the projects it is bumping, so pull
-          # request bodies are thinner. GITHUB_COM_TOKEN would restore that, at
-          # the cost of the credential this avoids.
+          # Two limitations, both accepted rather than discovered later.
+          #
+          # It cannot write .github/workflows/, and no permission exists to let
+          # it — there is no `workflows` scope. Action versions are therefore
+          # listed on the dependency dashboard and bumped by hand; see the
+          # github-actions rule in renovate.json5, which also explains what
+          # ticking one of those checkboxes would actually do.
+          #
+          # And scoped to this repository, it cannot always fetch release notes
+          # from the projects it bumps, so pull request bodies are thinner.
+          # GITHUB_COM_TOKEN would restore that, at the cost of the credential
+          # this avoids.
           RENOVATE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RENOVATE_REPOSITORIES: ${{ github.repository }}
           LOG_LEVEL: ${{ inputs.log_level || 'info' }}
