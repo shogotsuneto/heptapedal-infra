@@ -7,6 +7,13 @@ site keeps serving pages and nobody can sign in.
 `gitops/apps/heptapedal/supabase-keepalive.yaml` is a CronJob that queries the
 project daily. One thing has to exist for it to query.
 
+> **This does not currently work, and the job is not the reason.**
+> On 2026-09-13 Supabase warned that the project would be paused. The CronJob
+> had succeeded that morning and the query still returns `200` with its row —
+> so one `select` a day through PostgREST is *not* what Supabase counts as
+> activity. See the "What counts as activity" section below, which is now a
+> record of a wrong assumption rather than a design note.
+
 ## Setup: create the row it queries
 
 Supabase → SQL Editor. This exists to be selected from; it holds nothing.
@@ -37,11 +44,31 @@ RLS is enabled even though the table holds nothing worth protecting: a table in
 `public` without it trips Supabase's own security advisor, and the policy costs
 one line.
 
-**Why a table rather than a health check.** The documented rule is *sufficient
-user database activity*, and `/auth/v1/health` answers from configuration
-without touching Postgres — it would prove the project responds while doing
-nothing about the thing that pauses it. A `select` cannot succeed without a
-query running.
+## What counts as activity — the assumption, and how it failed
+
+**The reasoning was this.** The documented rule is *sufficient user database
+activity*. `/auth/v1/health` answers from configuration without touching
+Postgres, so it would prove the project responds while doing nothing about the
+thing that pauses it. A `select` through PostgREST cannot succeed without a
+query running, so it was chosen instead.
+
+**The reasoning was sound and the conclusion was wrong.** A query does run —
+that part was verified, and still verifies. What was assumed without evidence is
+that *any* query counts, and Supabase evidently measures something a single
+daily `select` does not reach.
+
+Three candidate explanations, none confirmed:
+
+- **Volume.** "Sufficient" is doing more work than it looked. One tiny read a
+  day may round to nothing against whatever the threshold is.
+- **Path.** PostgREST requests may be measured separately from direct database
+  connections, and the pause may track the latter.
+- **Something else entirely** — compute time, egress, connection count — with
+  "database activity" being a description rather than the metric.
+
+The cheapest test is frequency, because it needs one line changed. Tracked in
+[#107](https://github.com/shogotsuneto/heptapedal-infra/issues/107); **do not treat this job as
+protection until one of those is confirmed.**
 
 The RLS policy grants `anon` nothing but the ability to read a row containing
 the number 1.
