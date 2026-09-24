@@ -18,7 +18,7 @@ spec:
   source:
     repoURL: https://charts.jetstack.io
     chart: cert-manager
-    targetRevision: v1.21.1
+    targetRevision: v1.21.2
     helm:
       valuesObject:
         # Off by default in this chart, and nothing works without them.
