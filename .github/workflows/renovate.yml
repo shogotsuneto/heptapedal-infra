@@ -65,6 +65,11 @@ permissions:
   # workflow reported success while creating nothing.
   statuses: write
   checks: read
+  # Renovate reads Dependabot's alerts to know which updates are security fixes
+  # and treat them differently. Without it the run still works, and says so on
+  # the dependency dashboard under "Repository Problems" — which is where this
+  # was found, rather than in a failure.
+  vulnerability-alerts: read
 
 concurrency:
   group: renovate
