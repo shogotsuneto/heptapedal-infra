@@ -53,7 +53,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: ping
-              image: curlimages/curl:8.22.0
+              image: curlimages/curl:8.23.0
               env:
                 - name: SUPABASE_URL
                   valueFrom:
