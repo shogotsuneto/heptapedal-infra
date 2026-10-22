@@ -86,6 +86,21 @@ output "database_url" {
   sensitive = true
 }
 
+# What becomes AGENT_AUTH_DATABASE_URL in agent-auth's sealed Secret. Built the
+# same way as database_url, against agent-auth's own database and role.
+output "agent_auth_database_url" {
+  description = "AGENT_AUTH_DATABASE_URL, as agent_auth_user over the private network."
+  value = format(
+    "postgresql://%s:%s@%s:%d/%s?sslmode=require",
+    digitalocean_database_user.agent_auth.name,
+    digitalocean_database_user.agent_auth.password,
+    digitalocean_database_cluster.heptapedal.private_host,
+    digitalocean_database_cluster.heptapedal.port,
+    digitalocean_database_db.agent_auth.name,
+  )
+  sensitive = true
+}
+
 # doadmin, for the one-time bootstrap in README.md — creating extensions needs
 # more than the application's role has. Not for the application to use.
 output "database_admin_url" {
