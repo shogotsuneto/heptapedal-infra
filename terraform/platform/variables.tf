@@ -77,6 +77,21 @@ variable "database_user" {
   default     = "app_user"
 }
 
+variable "agent_auth_database_name" {
+  description = <<-EOT
+    agent-auth's database, on the same cluster as the application's but
+    separate from it: the two services share no database and no secret.
+  EOT
+  type        = string
+  default     = "agent_auth"
+}
+
+variable "agent_auth_database_user" {
+  description = "Role agent-auth connects as. Can reach its own database and not the application's."
+  type        = string
+  default     = "agent_auth_user"
+}
+
 variable "node_size" {
   description = "Worker Droplet size. 2 of these is 48 USD/month — see ADR 0004's costing."
   type        = string

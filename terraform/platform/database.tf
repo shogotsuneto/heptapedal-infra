@@ -76,6 +76,31 @@ resource "digitalocean_database_user" "app" {
   }
 }
 
+# agent-auth, the OAuth authorization server MCP clients sign in through
+# (heptapedal#84). It runs from the application's chart but keeps its own
+# database and role, so neither service ever holds the other's credentials.
+# Same instance: a second cluster would double the database bill for a handful
+# of short-lived rows.
+#
+# Terraform creates both, so the database is owned by doadmin rather than by
+# agent_auth_user, and the grants the migration Job needs come from
+# sql/agent-auth.sql — the same split as the application's. See README.md.
+resource "digitalocean_database_db" "agent_auth" {
+  cluster_id = digitalocean_database_cluster.heptapedal.id
+  name       = var.agent_auth_database_name
+}
+
+resource "digitalocean_database_user" "agent_auth" {
+  cluster_id = digitalocean_database_cluster.heptapedal.id
+  name       = var.agent_auth_database_user
+
+  lifecycle {
+    # The same digitalocean/terraform-provider-digitalocean#1437 workaround as
+    # `app` above, and to be dropped with it.
+    ignore_changes = [settings]
+  }
+}
+
 # Trusts the Kubernetes cluster as a resource, not as a set of addresses. Node
 # IPs are ephemeral — an allowlist of them would rot on the first node
 # replacement, and silently, since the symptom is the application failing to

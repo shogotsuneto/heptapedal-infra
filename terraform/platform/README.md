@@ -93,6 +93,40 @@ sealed `DATABASE_URL` in #17.
 > wrong with the cluster. `database_admin_url` no longer reads that attribute,
 > so the noise stays noise; see the comment in `database.tf`.
 
+### agent-auth's database
+
+agent-auth — the OAuth authorization server for `/mcp` (heptapedal#84) — has
+its own database and role on the same cluster, `agent_auth` and
+`agent_auth_user`. Its migration Job is a PreSync hook in the application's
+chart, so this has to run before the chart is synced with OAuth on; a Job that
+cannot create its tables holds up the application's sync with it.
+
+Same connection as above, a different file:
+
+```bash
+kubectl run pg-bootstrap --rm -i --restart=Never \
+  --image=postgres:17-alpine \
+  --env="PGURL=$(tofu output -raw database_admin_url)" \
+  -- sh -c 'psql "$PGURL"' < sql/agent-auth.sql
+```
+
+Verify, from `hepta`:
+
+```bash
+kubectl run pg-check --rm -i --restart=Never --image=postgres:17-alpine \
+  --env="PGURL=$(tofu output -raw database_admin_url)" \
+  -- sh -c 'psql "$PGURL"' <<'SQL'
+SELECT r, d, has_database_privilege(r, d, 'CONNECT')
+  FROM unnest(ARRAY['app_user', 'agent_auth_user']) r,
+       unnest(ARRAY['hepta', 'agent_auth']) d
+ ORDER BY r, d;
+SQL
+```
+
+Each role should be `t` on its own database and `f` on the other's.
+`agent_auth_database_url` is what becomes `AGENT_AUTH_DATABASE_URL` in
+agent-auth's sealed Secret.
+
 ### Getting a psql prompt
 
 `kubectl port-forward` targets a Pod or Service *in the cluster* and cannot
@@ -156,8 +190,11 @@ sealed Secret — a credential that can do anything to the database, resident
 forever to cover something that runs about once per database lifetime.
 
 One documented step, alongside the nameserver delegation and the Spaces keys, is
-the better trade. Revisit if rebuilds become frequent, or a second database
-arrives.
+the better trade. Revisit if rebuilds become frequent.
+
+A second database has since arrived — agent-auth's — and the trade held: it
+added a second file to the same step, not a second occasion to run it. Both
+still run once per database lifetime.
 
 ## DNS delegation
 

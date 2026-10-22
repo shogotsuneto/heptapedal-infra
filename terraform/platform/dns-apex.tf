@@ -42,3 +42,19 @@ resource "digitalocean_record" "apex" {
   # without having to remember to lower it beforehand.
   ttl = var.apex_ttl
 }
+
+# agent-auth's host — the OAuth issuer, served by the same Gateway as the apex.
+# The wildcard certificate and the Gateway's `https-wildcard` listener already
+# cover it, so this record is the only thing the name needs.
+#
+# A CNAME to the apex rather than a second A record on `apex_ip`: the address
+# then has one home, and a rebuild that moves the balancer moves this with it.
+# With `apex_record = false` it points at a name with no address, which fails as
+# fast as the apex does — the behaviour that variable is there for.
+resource "digitalocean_record" "agent_auth" {
+  domain = digitalocean_domain.heptapedal.id
+  type   = "CNAME"
+  name   = "agent-auth"
+  value  = "${var.domain}."
+  ttl    = var.apex_ttl
+}
