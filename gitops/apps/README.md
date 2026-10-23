@@ -32,8 +32,10 @@ is buying.
 | 1 | `heptapedal-embeddings` — the app reaches it at `embeddings.hepta.svc:80` |
 | 2 | `heptapedal-app` |
 
-Both Applications pin `0.2.0`, an immutable chart version rather than a moving
-tag ([ADR 0011](../../docs/adr/0011-artifact-distribution-ghcr.md)). The
+Each Application pins an immutable chart version rather than a moving tag
+([ADR 0011](../../docs/adr/0011-artifact-distribution-ghcr.md)). The two charts
+are released independently — the application's moves without the embeddings
+service's — so their versions need not match, and are not restated here. The
 published charts already point `image.repository`/`tag` at GHCR, so the values
 here do not restate them.
 
