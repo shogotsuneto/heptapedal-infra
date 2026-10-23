@@ -28,7 +28,7 @@ is buying.
 | Wave | What |
 |---|---|
 | -1 | `hepta` namespace |
-| 0 | `app-secrets`, and the `ghcr` pull credential |
+| 0 | `app-secrets`, `agent-auth-secrets`, and the `ghcr` pull credential |
 | 1 | `heptapedal-embeddings` — the app reaches it at `embeddings.hepta.svc:80` |
 | 2 | `heptapedal-app` |
 
@@ -107,6 +107,107 @@ if it keeps its type, and kubeseal carries that in `spec.template`:
 ```bash
 grep 'type:' gitops/apps/heptapedal/ghcr.sealed.yaml   # kubernetes.io/dockerconfigjson
 ```
+
+### agent-auth's Secret
+
+With `oauth.enabled`, the chart also runs agent-auth — the OAuth authorization
+server ChatGPT signs in through (heptapedal#84) — and its own migration Job,
+another PreSync hook. That Job reads `agent-auth-secrets`, so the Secret is
+wave 0 for exactly the reason `app-secrets` is.
+
+The two services share no secret. agent-auth's holds only what is agent-auth's:
+
+| Key | What | Its home |
+|---|---|---|
+| `AGENT_AUTH_DATABASE_URL` | `agent_auth_user` over the VPC's private host | Terraform state; the role's password can be reset in the console |
+| `AGENT_AUTH_SIGNING_KEY` | P-256 private key, PKCS#8 PEM; signs every access token | none — see below |
+
+The Supabase URL it also needs is read from `app-secrets` by the chart, so it is
+not restated here.
+
+Prerequisites, both from [`terraform/platform`](../../terraform/platform/README.md#agent-auths-database):
+the database and role, with `sql/agent-auth.sql` run against them, and the
+`agent-auth` DNS record.
+
+```bash
+kubectl create secret generic agent-auth-secrets -n hepta \
+  --dry-run=client -o yaml \
+  --from-literal=AGENT_AUTH_DATABASE_URL="$(tofu -chdir=terraform/platform output -raw agent_auth_database_url)" \
+  --from-file=AGENT_AUTH_SIGNING_KEY=<(openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256) \
+  | kubeseal --format yaml \
+  | kubectl annotate --local -f - -o yaml \
+      argocd.argoproj.io/sync-wave=0 \
+      argocd.argoproj.io/sync-options=SkipDryRunOnMissingResource=true \
+  > gitops/apps/heptapedal/agent-auth-secrets.sealed.yaml
+```
+
+The key is generated inside the pipeline, so it never touches the disk.
+`genpkey` writes PKCS#8 (`-----BEGIN PRIVATE KEY-----`), which is the format
+agent-auth expects; `ecparam -genkey` would write SEC1 and is not a substitute.
+
+Check that both keys made it in:
+
+```bash
+grep -E '^\s+AGENT_AUTH_' gitops/apps/heptapedal/agent-auth-secrets.sealed.yaml
+```
+
+#### The signing key has no other copy, deliberately
+
+That looks like the one thing [ADR 0007](../../docs/adr/0007-secrets-sealed-secrets.md)
+forbids: a sealed value that is its own only copy. It is not, because losing the
+key is not a loss. Replacing it is the documented rotation:
+
+- hepta refetches agent-auth's JWKS when it sees an unknown `kid`
+- access tokens signed with the old key fail, and they live 10 minutes
+- grants and refresh tokens are rows in `agent_auth`, not signatures, so they
+  survive; each client's next refresh gets a token from the new key
+
+So a rebuild that loses the sealing key costs connected apps at most ten
+minutes, and nobody has to reconnect. Generating a fresh key is the recovery,
+and a backup would be a second place for a signing key to leak from, without
+saving anything.
+
+**To rotate,** run the command above again, commit, and restart agent-auth once
+it has synced. `envFrom` is read at start, so a Secret change alone does nothing:
+
+```bash
+kubectl -n hepta rollout restart deployment/agent-auth
+```
+
+#### Gateway access logs
+
+agent-auth redirects to hepta's `/oauth/consent?authorization_id=…`, and that id
+is a bearer secret until it is used or expires, which takes at most 10 minutes.
+hepta and agent-auth never log query strings. The Gateway was checked on
+2026-10-22:
+
+- **Nothing persisted carries them.** The Gateway is Cilium's in-agent Envoy,
+  with `debug=false` and no Hubble flow export. The agent's own log has no
+  request lines, so what Alloy ships to Loki has no URLs.
+- **Hubble's in-memory ring buffer may.** L7 flows can carry the URL, and they
+  are readable through hubble-relay by whoever holds cluster-admin. That buffer
+  is volatile, and the id is short-lived and single-use. Anyone who could read
+  the buffer could also read the database, so it is accepted.
+
+Re-check if Hubble flow export, or a Gateway access-log setting, is ever turned
+on: `kubectl -n kube-system get cm cilium-config -o yaml | grep -iE 'export|access|debug'`.
+
+#### After it syncs
+
+```bash
+# agent-auth's metadata, through the Gateway
+curl -s https://agent-auth.heptapedal.com/.well-known/oauth-authorization-server
+
+# /mcp now advertises it: a 401 that points at the protected-resource metadata,
+# and that document naming agent-auth as its authorization server
+curl -si -X POST https://heptapedal.com/mcp | grep -i www-authenticate
+curl -s https://heptapedal.com/.well-known/oauth-protected-resource/mcp
+
+# only the four public paths are routed; the consent API stays in-cluster
+curl -s -o /dev/null -w '%{http_code}\n' https://agent-auth.heptapedal.com/grants   # 404
+```
+
+PAT clients are unaffected: `/mcp` tells the two apart by the `hep_pat_` prefix.
 
 ### On the database password specifically
 

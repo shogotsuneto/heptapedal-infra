@@ -57,6 +57,44 @@ spec:
         # arrives on.
         mcpAllowedHosts: heptapedal.com
 
+        # OAuth for /mcp, for clients that cannot send a PAT header (ChatGPT).
+        # PATs keep working alongside it. The chart runs agent-auth, the
+        # authorization server, from the same image and feeds both sides from
+        # this one block, so the token audience and issuer cannot drift apart.
+        #
+        # `resource` must be the /mcp URL exactly as clients configure it — it
+        # is every token's `aud`. Changing `issuer` invalidates every connected
+        # app; move the old value to `previousIssuers` while they reconnect.
+        #
+        # Needs, before this syncs: agent-auth's database and role
+        # (terraform/platform, sql/agent-auth.sql), its DNS record (same stack),
+        # and agent-auth-secrets at wave 0. Its migration Job is a PreSync hook
+        # like the application's, so a missing piece holds up this whole sync.
+        # See ../README.md.
+        oauth:
+          enabled: true
+          resource: https://heptapedal.com/mcp
+          issuer: https://agent-auth.heptapedal.com
+
+        agentAuth:
+          # The issuer's host is a subdomain, so its route attaches to the
+          # wildcard listener rather than inheriting the apex one below.
+          httpRoute:
+            parentRefs:
+              - name: heptapedal
+                namespace: gateway
+                sectionName: https-wildcard
+
+          # The chart's requests, restated so the limit sits next to them.
+          # Provisional, as with the application's: a small server holding a
+          # JWKS cache and a connection pool, capped so a leak stays its own.
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+
         # The two routing surfaces are independent switches, not either/or.
         # This cluster has no Ingress controller — ingress-nginx reached end of
         # life in March 2026 — so the Ingress goes off and the HTTPRoute on.
