@@ -44,9 +44,8 @@ resource "digitalocean_kubernetes_cluster" "heptapedal" {
 
   # Patch upgrades, applied in the window below. surge_upgrade asks for
   # replacements to be stood up before draining, which wants a Droplet limit of
-  # n + min(10, num_nodes) — 4 at two nodes, against an account limit of 3. So
-  # it currently degrades to a partial surge and finishes node-by-node. That is
-  # a documented fallback, not a failure; see README, "The Droplet limit".
+  # n + min(10, num_nodes) — 6 at three nodes, against an account limit of 10,
+  # so upgrades get a full surge. See README, "The Droplet limit".
   auto_upgrade  = true
   surge_upgrade = true
 
