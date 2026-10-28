@@ -33,10 +33,10 @@ The last three are the manual work, and none of them is optional.
 ### Before
 
 **Check the Droplet limit.** A replace creates the new nodes before destroying
-the old, so two nodes need four Droplets. The account allows three, and this
-fails partway through with `2 additional nodes exceed the available droplet
-limit` — which has happened. Either raise the limit first (#67), or accept a
-destroy-then-create and the downtime that comes with it.
+the old, so three nodes need six Droplets. The account allows ten, so this fits
+— but a limit below six fails partway through with `N additional nodes exceed
+the available droplet limit`, which has happened (#67). If the limit has
+shrunk, raise it first or accept a destroy-then-create and its downtime.
 
 **Withdraw the apex record**, so nothing points at an address that is about to
 stop existing:

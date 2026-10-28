@@ -31,9 +31,11 @@ spec:
         # chart's own production guidance applies and the pod gets a ceiling
         # rather than being left unbounded.
         #
-        # 1Gi of requests fits on exactly one of the two nodes — see #67. The
-        # limit is a ceiling, not a reservation, but if TEI actually approaches
-        # it that node has little left, so measure before trusting it.
+        # 1Gi of requests fit on exactly one node while there were two (#67);
+        # the third (ADR 0016) is what gives it somewhere to go when that node
+        # drains. The limit is a ceiling, not a reservation, but if TEI actually
+        # approaches it that node has little left, so measure before trusting
+        # it.
         resources:
           requests:
             cpu: 250m

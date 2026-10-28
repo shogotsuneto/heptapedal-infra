@@ -1,6 +1,7 @@
 # 0004. Run on DOKS with a non-HA control plane
 
-- **Status:** Accepted
+- **Status:** Accepted; the node count is superseded by
+  [0016](0016-three-nodes.md)
 - **Date:** 2026-08-29
 
 ## Context
