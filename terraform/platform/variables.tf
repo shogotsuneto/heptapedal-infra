@@ -93,19 +93,21 @@ variable "agent_auth_database_user" {
 }
 
 variable "node_size" {
-  description = "Worker Droplet size. 2 of these is 48 USD/month — see ADR 0004's costing."
+  description = "Worker Droplet size. 3 of these is 72 USD/month — see ADR 0016's costing."
   type        = string
   default     = "s-2vcpu-4gb"
 }
 
 variable "node_count" {
   description = <<-EOT
-    Fixed at 2. Not autoscaled: the budget in ADR 0004 has ~20 USD/month of
-    headroom, and an autoscaler is exactly the thing that spends it without
+    Fixed at 3 (ADR 0016): the fewest at which losing one node still leaves
+    room for every request, and at which a three-replica Raft group can put each
+    member on its own node. Not autoscaled: the budget is already past ADR 0004's
+    target, and an autoscaler is exactly the thing that spends more without
     asking.
   EOT
   type        = number
-  default     = 2
+  default     = 3
 }
 
 variable "maintenance_window" {

@@ -19,7 +19,7 @@ every trade-off written down rather than implied.
 |---|---|---|
 | IaC | OpenTofu — plain Terraform HCL; `terraform` works against the same tree | [0002](docs/adr/0002-iac-tool-opentofu.md) |
 | State | DigitalOcean Spaces, S3-native locking | [0003](docs/adr/0003-state-backend-spaces.md) |
-| Cluster | DOKS, non-HA control plane, 2 × `s-2vcpu-4gb` | [0004](docs/adr/0004-kubernetes-on-doks.md) |
+| Cluster | DOKS, non-HA control plane, 3 × `s-2vcpu-4gb` | [0004](docs/adr/0004-kubernetes-on-doks.md), [0016](docs/adr/0016-three-nodes.md) |
 | Ingress | Gateway API, using the Cilium implementation DOKS already ships | [0005](docs/adr/0005-gateway-api-envoy-gateway.md), [0014](docs/adr/0014-use-the-provider-gateway-implementation.md) |
 | TLS / DNS | cert-manager DNS-01 wildcard + DigitalOcean DNS | [0009](docs/adr/0009-dns-and-tls.md) |
 | Delivery | Argo CD, app-of-apps | [0006](docs/adr/0006-gitops-argo-cd-app-of-apps.md) |
