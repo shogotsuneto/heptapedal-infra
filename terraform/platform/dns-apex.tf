@@ -58,3 +58,13 @@ resource "digitalocean_record" "agent_auth" {
   value  = "${var.domain}."
   ttl    = var.apex_ttl
 }
+
+# NATS over WebSocket (ADR 0017), on the same Gateway and wildcard listener as
+# agent-auth, and a CNAME to the apex for the same reason.
+resource "digitalocean_record" "nats" {
+  domain = digitalocean_domain.heptapedal.id
+  type   = "CNAME"
+  name   = "nats"
+  value  = "${var.domain}."
+  ttl    = var.apex_ttl
+}

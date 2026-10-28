@@ -27,6 +27,7 @@ considered" section is the one that earns its keep.
 | [0014](0014-use-the-provider-gateway-implementation.md) | Use DigitalOcean's Gateway API implementation | Accepted |
 | [0015](0015-plan-locally.md) | Plan locally; CI validates but does not plan | Accepted |
 | [0016](0016-three-nodes.md) | Grow the node pool to three nodes | Accepted |
+| [0017](0017-nats.md) | Run one NATS cluster, an account per application, nkey authentication | Accepted |
 
 ## Statuses
 

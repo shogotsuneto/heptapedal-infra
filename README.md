@@ -25,6 +25,7 @@ every trade-off written down rather than implied.
 | Delivery | Argo CD, app-of-apps | [0006](docs/adr/0006-gitops-argo-cd-app-of-apps.md) |
 | Secrets | Sealed Secrets | [0007](docs/adr/0007-secrets-sealed-secrets.md) |
 | Database | DigitalOcean Managed Postgres with pgvector; auth on Supabase | [0008](docs/adr/0008-postgres-do-managed.md) |
+| Messaging | NATS JetStream, an account per application, nkey auth; WebSocket from outside | [0017](docs/adr/0017-nats.md) |
 | Telemetry | Grafana Alloy → Grafana Cloud, with alerts and an external probe | [0010](docs/adr/0010-observability-grafana-cloud.md) |
 
 ## Layout
@@ -37,7 +38,7 @@ terraform/
   grafana/      # alert rules, dashboards, the external probe
 gitops/
   root/         # app-of-apps root: two child Applications
-  platform/     # cert-manager, Sealed Secrets, the shared Gateway, Alloy
+  platform/     # cert-manager, Sealed Secrets, the shared Gateway, Alloy, NATS
   apps/         # one directory per application
 docs/
   adr/                    # architecture decision records
