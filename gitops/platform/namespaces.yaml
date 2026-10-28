@@ -34,3 +34,12 @@ metadata:
   name: gateway
   annotations:
     argocd.argoproj.io/sync-wave: "-1"
+---
+# The shared NATS cluster (ADR 0017). Applications reach it here across
+# namespaces; what isolates them is their NATS account, not this boundary.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nats
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"

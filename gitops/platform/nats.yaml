@@ -1,0 +1,143 @@
+# NATS with JetStream, shared by every application on the platform
+# ([ADR 0017](../../docs/adr/0017-nats.md)).
+#
+# One account per application is the isolation boundary: subjects, streams and
+# JetStream quotas are all per account, and accounts see nothing of each other
+# without an explicit export. Every user authenticates with an nkey, so this
+# file holds only public keys — the seeds live in SealedSecrets next to each
+# application, or on the device that connects. See README.md, "NATS".
+#
+# Wave 2, alongside the other add-ons. Nothing here needs a secret.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nats
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://nats-io.github.io/k8s/helm/charts/
+    chart: nats
+    targetRevision: 2.15.1
+    helm:
+      valuesObject:
+        config:
+          # Three members, so a Raft group survives losing one. Pinned one per
+          # node below; a third node is what made that possible (ADR 0016).
+          cluster:
+            enabled: true
+            replicas: 3
+            # Already the chart's default, and load-bearing for external
+            # clients: without it the server tells every client the routes'
+            # pod IPs as reconnect targets, which outside the cluster are
+            # unreachable.
+            noAdvertise: true
+
+          jetstream:
+            enabled: true
+            fileStore:
+              pvc:
+                size: 5Gi
+              # Below the volume, so JetStream refuses writes before the
+              # filesystem does.
+              maxSize: 4GB
+            # Small on purpose: the container is capped at 512Mi, and a memory
+            # stream counts against it.
+            memoryStore:
+              enabled: true
+              maxSize: 64MB
+
+          # Plain WebSocket inside the cluster; the Gateway terminates TLS with
+          # the wildcard certificate and forwards here (nats-route.yaml). This
+          # is the only way in from outside.
+          websocket:
+            enabled: true
+            port: 8080
+
+          merge:
+            # Under the Load Balancer's ~300-second TCP flow timeout, measured
+            # in gateway.yaml, with room for a missed ping.
+            ping_interval: 60s
+
+            # The tenant registry. One account per application, named after
+            # its namespace; every user is an nkey public key.
+            #
+            # Never let this list hold no users at all. With no users anywhere,
+            # NATS configures no authentication and accepts anonymous clients —
+            # from the Internet too, through the route. SANDBOX exists partly so
+            # that is never one deletion away.
+            accounts:
+              # The operator's own: smoke tests and experiments from a laptop,
+              # kept away from any application's streams.
+              SANDBOX:
+                jetstream:
+                  max_file: << 512MB >>
+                  max_mem: << 16MB >>
+                  max_streams: 10
+                users:
+                  - nkey: UDBWUYNJKGDXVZYXXRAEQNLVQ2BCIGULRWCAZSJNN527CO4M4IMU2AY2 # laptop, ~/.config/nats/heptapedal.nk
+
+        container:
+          env:
+            # Lets the GC work toward the limit rather than past it.
+            GOMEMLIMIT: 400MiB
+          # Provisional, like the application's. An idle server runs in tens of
+          # MiB, and after ADR 0016 the pool has ~1Gi of requests to spare in
+          # total, so this starts near idle and is raised once Grafana shows
+          # real traffic. The limit is what the memory store is sized against.
+          merge:
+            resources:
+              requests:
+                cpu: 50m
+                memory: 128Mi
+              limits:
+                memory: 512Mi
+
+        reloader:
+          merge:
+            resources:
+              requests:
+                cpu: 10m
+                memory: 16Mi
+              limits:
+                memory: 64Mi
+
+        podTemplate:
+          # Hard rather than a spread constraint: two members on one node means
+          # that node takes quorum with it, which is the failure the cluster
+          # exists to survive. A fourth replica would sit Pending, which is the
+          # right signal.
+          merge:
+            spec:
+              affinity:
+                podAntiAffinity:
+                  requiredDuringSchedulingIgnoredDuringExecution:
+                    - topologyKey: kubernetes.io/hostname
+                      labelSelector:
+                        matchLabels:
+                          app.kubernetes.io/name: nats
+                          app.kubernetes.io/instance: nats
+                          app.kubernetes.io/component: nats
+
+        service:
+          ports:
+            leafnodes:
+              enabled: false
+            mqtt:
+              enabled: false
+
+        # An in-cluster shell with the CLI. Not worth a Deployment: the laptop
+        # context in README.md reaches the same cluster.
+        natsBox:
+          enabled: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: nats
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
