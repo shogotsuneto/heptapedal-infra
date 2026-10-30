@@ -8,9 +8,10 @@ Add-ons every cluster gets, each an Argo CD `Application` ordered by
 | -1   | namespaces the bundle installs into             | in               |
 | 0    | Sealed Secrets controller                       | in               |
 | 1    | every `SealedSecret` this bundle needs          | with each add-on |
-| 2    | cert-manager; Grafana Alloy                     | in               |
+| 2    | cert-manager; Grafana Alloy; NATS               | in               |
 | 3    | `ClusterIssuer`s and the wildcard `Certificate` | in               |
 | 4    | the shared `Gateway` and the HTTPS redirect     | in               |
+| 5    | routes onto the Gateway from platform add-ons   | NATS             |
 
 The waves follow real dependencies, not tidiness:
 
@@ -381,3 +382,83 @@ kubectl -n gateway get secret heptapedal-wildcard-tls \
 
 `(STAGING)` anywhere in the issuer means it is still the untrusted root, which
 proves the pipeline and cannot serve traffic.
+
+## NATS
+
+One JetStream cluster for every application, three members pinned one per node
+([ADR 0017](../../docs/adr/0017-nats.md)). Each application gets an **account**:
+its own subjects, streams and JetStream quota, invisible to every other account.
+Every user is an **nkey** — the server holds only public keys, all of them in
+`nats.yaml`, so nothing in this bundle is secret.
+
+| From | URL |
+|---|---|
+| inside the cluster | `nats://nats.nats.svc:4222` |
+| outside | `wss://nats.heptapedal.com` (TLS at the Gateway) |
+
+**The accounts list must never be left without users.** With no users at all,
+NATS turns authentication off and accepts anyone, and the route makes that the
+Internet. `SANDBOX` holds the laptop's key partly so that is never one deletion
+away.
+
+Adding or removing a key is a commit: the chart's reloader sends the server a
+`SIGHUP`, nothing restarts, and a removed key's open connections are closed at
+that moment rather than at their next reconnect.
+
+### Adding an application
+
+Pick an account name — the namespace, upper-cased — and add it to `accounts` in
+`nats.yaml` with a JetStream quota sized to fit the cluster's `max_file_store`
+next to the others.
+
+Then generate the application's key and seal its seed into the application's
+own namespace. The seed is generated inside the pipeline and never touches the
+disk; the second line, the public key, is the only thing printed:
+
+```bash
+keys=$(nats auth nkey gen user --public)
+
+kubectl create secret generic nats-user -n <namespace> \
+  --dry-run=client -o yaml \
+  --from-literal=nats.nk="$(sed -n 1p <<<"$keys")" \
+  | kubeseal --format yaml \
+  | kubectl annotate --local -f - -o yaml \
+      argocd.argoproj.io/sync-wave=0 \
+      argocd.argoproj.io/sync-options=SkipDryRunOnMissingResource=true \
+  > gitops/apps/<app>/nats-user.sealed.yaml
+
+sed -n 2p <<<"$keys"    # -> users: [{ nkey: ... }] in nats.yaml
+```
+
+Nothing keeps a copy, and nothing needs to. A lost or leaked seed is replaced by
+running this again and swapping the public key — there is no signing key above
+it to protect.
+
+The application mounts the Secret and connects with the seed at `nats.nk`;
+every client library takes an nkey seed file.
+
+### Adding a device
+
+The seed is created on the device and stays there:
+
+```bash
+mkdir -p ~/.config/nats && chmod 700 ~/.config/nats
+(umask 077; nats auth nkey gen user --output ~/.config/nats/heptapedal.nk)
+nats auth nkey show ~/.config/nats/heptapedal.nk    # -> nats.yaml
+
+nats context save heptapedal \
+  --server wss://nats.heptapedal.com \
+  --nkey ~/.config/nats/heptapedal.nk
+```
+
+Add the public key to the account it should reach — `SANDBOX`, or an
+application's own to inspect its streams — with a comment naming the device.
+A lost device is a one-line removal.
+
+### Checking it
+
+```bash
+kubectl -n nats get pods -o wide        # three, on three different nodes
+nats --context heptapedal account info  # JetStream quota of the key's account
+nats -s wss://nats.heptapedal.com pub x y   # no key: Authorization Violation
+```

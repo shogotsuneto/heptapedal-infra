@@ -1,0 +1,34 @@
+# NATS from outside the cluster, as WebSocket on the shared Gateway
+# ([ADR 0017](../../docs/adr/0017-nats.md)): wss://nats.heptapedal.com.
+#
+# WebSocket rather than the native protocol on its own port because it rides
+# the Load Balancer and certificate that already exist. Native NATS would need
+# a second balancer (12 USD/month), or TLS passthrough by SNI — which NATS only
+# supports with `handshake_first` on both ends, through a TLSRoute that is
+# experimental on this cluster. Cilium's listeners already carry
+# `upgradeType: websocket`.
+#
+# Wave 5, after the Gateway it attaches to.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: nats
+  namespace: nats
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  parentRefs:
+    - name: heptapedal
+      namespace: gateway
+      sectionName: https-wildcard
+  hostnames:
+    - nats.heptapedal.com
+  rules:
+    - backendRefs:
+        - name: nats
+          port: 8080
+      # A WebSocket is one request that lasts as long as the connection. Left
+      # unset, Envoy's route timeout defaults to 15 seconds, so the route says
+      # explicitly that there is none.
+      timeouts:
+        request: 0s
