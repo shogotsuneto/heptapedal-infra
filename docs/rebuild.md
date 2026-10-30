@@ -25,8 +25,9 @@ in it lives outside.
 | **The Sealed Secrets keys** | every `SealedSecret` in git becomes undecryptable — five of them |
 | **The Load Balancer, and its address** | `apex_ip` is now wrong; DNS points at nothing |
 | Argo CD's registration of the deploy key | the private key lived in the cluster |
+| **NATS JetStream data** | its volumes outlive the cluster, but nothing reattaches them — see below |
 
-The last three are the manual work, and none of them is optional.
+The last four are the manual work. The first three are not optional.
 
 ## Replacing the cluster
 
@@ -105,6 +106,24 @@ tofu -chdir=terraform/platform apply
 There is no way to keep the old address: reserved IPs do not attach to
 DigitalOcean Load Balancers, and `do-loadbalancer-ip` wants a BYOIP prefix. The
 record's TTL is 300s so the switch costs minutes.
+
+**6. Decide about the old JetStream volumes.** The NATS members' volumes are
+DigitalOcean Block Storage, and `destroy_all_associated_resources = false`
+leaves them behind when the old cluster goes. The new cluster provisions fresh,
+empty ones; the old three keep billing (5 GiB each) and hold the streams as
+they were. Nothing reattaches them on its own, so streams start empty unless
+you do — treat JetStream as rebuildable, not as a record. Once nothing on the
+old volumes is wanted:
+
+```bash
+doctl compute volume list --format ID,Name,Size,DropletIDs   # pvc-…, unattached
+doctl compute volume delete <id>
+```
+
+Application nkey seeds need no recovery either. A `nats-user` SealedSecret
+that no longer decrypts is replaced by generating a new key and swapping its
+public half in `gitops/platform/nats.yaml` — there is nothing to reseal that
+only the old cluster knew.
 
 ### Verify
 
