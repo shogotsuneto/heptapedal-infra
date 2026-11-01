@@ -24,6 +24,10 @@ spec:
   hostnames:
     - nats.heptapedal.com
   rules:
+    # The `nats` Service the chart renders (nats.yaml), not declared in this
+    # repository: same namespace as this route, so no ReferenceGrant. Port 8080
+    # is its `websocket` port, set by `config.websocket.port`; the monitor port
+    # is only on the headless Service, so nothing here can reach it.
     - backendRefs:
         - name: nats
           port: 8080
