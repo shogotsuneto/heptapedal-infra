@@ -24,7 +24,32 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
+
+  # Argo CD adds finalizers to a child Application of its own accord: one whose
+  # chart carries a Helm pre-delete hook gets `pre-delete-finalizer.argocd.
+  # argoproj.io` (and `/cleanup`), so the hook runs before the Application's
+  # resources go. k8s-monitoring has one — it uninstalls the Alloy CRs while
+  # the operator that holds their `uninstall-release` finalizer still exists.
+  #
+  # Those finalizers are not in git, so this bundle read them as drift and
+  # selfHeal stripped them; the controller added them back, and `platform`
+  # flapped OutOfSync every five minutes. Worse than noise: deleting `alloy`
+  # while they were stripped would skip the hook, and the Alloy CRs would wait
+  # forever on an operator already gone.
+  #
+  # So finalizers on child Applications are left to Argo CD. The cost: changing
+  # one in git no longer updates an existing Application — only a new one.
+  ignoreDifferences:
+    - group: argoproj.io
+      kind: Application
+      jsonPointers:
+        - /metadata/finalizers
+
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
+    # Without this, ignoreDifferences only hides the diff: a sync started for
+    # any other reason would still apply git's finalizers over the live ones.
+    syncOptions:
+      - RespectIgnoreDifferences=true
