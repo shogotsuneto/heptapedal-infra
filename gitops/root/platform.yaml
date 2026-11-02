@@ -11,6 +11,9 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "0"
+    # Diff by asking the API server what a server-side apply would produce,
+    # so fields other managers own are not drift. See syncOptions below.
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
@@ -24,32 +27,30 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
-
-  # Argo CD adds finalizers to a child Application of its own accord: one whose
-  # chart carries a Helm pre-delete hook gets `pre-delete-finalizer.argocd.
-  # argoproj.io` (and `/cleanup`), so the hook runs before the Application's
-  # resources go. k8s-monitoring has one — it uninstalls the Alloy CRs while
-  # the operator that holds their `uninstall-release` finalizer still exists.
-  #
-  # Those finalizers are not in git, so this bundle read them as drift and
-  # selfHeal stripped them; the controller added them back, and `platform`
-  # flapped OutOfSync every five minutes. Worse than noise: deleting `alloy`
-  # while they were stripped would skip the hook, and the Alloy CRs would wait
-  # forever on an operator already gone.
-  #
-  # So finalizers on child Applications are left to Argo CD. The cost: changing
-  # one in git no longer updates an existing Application — only a new one.
-  ignoreDifferences:
-    - group: argoproj.io
-      kind: Application
-      jsonPointers:
-        - /metadata/finalizers
-
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
-    # Without this, ignoreDifferences only hides the diff: a sync started for
-    # any other reason would still apply git's finalizers over the live ones.
+
+    # Server-side apply, because some fields in this bundle have two owners.
+    #
+    # Argo CD's controller adds finalizers to a child Application of its own
+    # accord: one whose chart carries a Helm pre-delete hook gets
+    # `pre-delete-finalizer.argocd.argoproj.io` and `…/cleanup`, so the hook
+    # runs before the Application's resources go. k8s-monitoring has one — it
+    # uninstalls the Alloy CRs while the operator holding their
+    # `uninstall-release` finalizer still exists.
+    #
+    # Client-side apply of a custom resource is a JSON merge patch, which
+    # replaces a list whole: every selfHeal wrote git's one finalizer over the
+    # three, the controller added its two back, and `platform` flapped
+    # OutOfSync every five minutes. Deleting `alloy` in the gap would have
+    # skipped the hook and left the Alloy CRs waiting on an operator already
+    # gone.
+    #
+    # Server-side apply records an owner per list item and merges only this
+    # bundle's own: `resources-finalizer` stays git's, the pre-delete pair the
+    # controller's. A finalizer removed from git is still removed, because
+    # this bundle owned it. ServerSideDiff above makes the comparison agree.
     syncOptions:
-      - RespectIgnoreDifferences=true
+      - ServerSideApply=true
