@@ -11,6 +11,9 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "0"
+    # Diff by asking the API server what a server-side apply would produce,
+    # so fields other managers own are not drift. See syncOptions below.
+    argocd.argoproj.io/compare-options: ServerSideDiff=true
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
@@ -28,3 +31,26 @@ spec:
     automated:
       prune: true
       selfHeal: true
+
+    # Server-side apply, because some fields in this bundle have two owners.
+    #
+    # Argo CD's controller adds finalizers to a child Application of its own
+    # accord: one whose chart carries a Helm pre-delete hook gets
+    # `pre-delete-finalizer.argocd.argoproj.io` and `…/cleanup`, so the hook
+    # runs before the Application's resources go. k8s-monitoring has one — it
+    # uninstalls the Alloy CRs while the operator holding their
+    # `uninstall-release` finalizer still exists.
+    #
+    # Client-side apply of a custom resource is a JSON merge patch, which
+    # replaces a list whole: every selfHeal wrote git's one finalizer over the
+    # three, the controller added its two back, and `platform` flapped
+    # OutOfSync every five minutes. Deleting `alloy` in the gap would have
+    # skipped the hook and left the Alloy CRs waiting on an operator already
+    # gone.
+    #
+    # Server-side apply records an owner per list item and merges only this
+    # bundle's own: `resources-finalizer` stays git's, the pre-delete pair the
+    # controller's. A finalizer removed from git is still removed, because
+    # this bundle owned it. ServerSideDiff above makes the comparison agree.
+    syncOptions:
+      - ServerSideApply=true
