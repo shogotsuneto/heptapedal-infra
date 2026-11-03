@@ -40,3 +40,20 @@ export TF_VAR_grafana_stack_slug=""
 # Where alerts go. The variable has no default in the configuration on purpose:
 # a committed one would be an address on an indexed page (ADR 0012).
 export TF_VAR_alert_email=""
+
+# kubectl, helm and kubeseal read only this repository's cluster, whatever
+# ~/.kube/config's current context is pointing at for other projects. The file
+# holds this one context and nothing else, so `kubectl config use-context`
+# cannot wander off to another cluster from here.
+#
+# Gitignored (`kubeconfig`). It carries no credential: the user entry runs
+# `doctl kubernetes cluster kubeconfig exec-credential`, which fetches a
+# short-lived token through doctl's own auth. Create or refresh it, after
+# `direnv allow` so that KUBECONFIG already points here, with
+#
+#   (umask 077; doctl kubernetes cluster kubeconfig save heptapedal)
+#
+# `save` writes into $KUBECONFIG and leaves ~/.kube/config alone. Not `show`:
+# that prints a kubeconfig with a bearer token embedded in it. Needed again only
+# when the cluster is replaced (docs/rebuild.md).
+export KUBECONFIG="$PWD/kubeconfig"
