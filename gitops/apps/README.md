@@ -276,16 +276,15 @@ seal() {
 }
 
 set_nkey() {
-  [[ $2 == U?(#c55) ]] || { echo "not a user public key: $2"; return 1; }
-  TAG=$1 KEY=$2 perl -pi -e 's/nkey: \S+(?= # .*\Q$ENV{TAG}\E)/nkey: $ENV{KEY}/' \
-    gitops/platform/nats.yaml
+  [[ $2 =~ '^U[A-Z0-9]{55}$' ]] || { echo "not a user public key: $2"; return 1; }
+  gsed -i "/# .*$1/ s/nkey: [A-Z0-9_]*/nkey: $2/" gitops/platform/nats.yaml
   grep -q "nkey: $2 # .*$1" gitops/platform/nats.yaml && echo "nats.yaml: $1 set" \
     || { echo "nats.yaml: no user tagged $1"; return 1; }
 }
 ```
 
-`set_nkey` checks the key's shape with zsh's extended globbing, so turn it on
-first: `setopt extended_glob`.
+`set_nkey` uses GNU sed (`gsed`, from Homebrew's `gnu-sed`): on each line of
+`nats.yaml` whose comment contains `TAG`, it replaces the key after `nkey: `.
 
 **1. The core's and the voice agent's NATS users.** As
 [platform/README](../platform/README.md#adding-an-application) does it, one
