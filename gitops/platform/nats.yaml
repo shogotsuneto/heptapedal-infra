@@ -98,8 +98,8 @@ spec:
                   max_mem: << 16MB >>
                   max_streams: 10
                 users:
-                  - nkey: UD6EB4PK4GRP4QSYBBE2QTOZP2BIFN4CGTEXYXLFW3JJQZWYUWMUD36D # core, Secret orderassist-nats-core
-                  - nkey: UBDTFRQVAQPGVGZFUIHGYFDZSAMI4MOCCASJ2YLRBK6MJ6CNOD43FQ6L # voice agent, Secret orderassist-nats-voice-agent
+                  - nkey: UA7U2DXLGRV6YCZQWRF2PZKQ3DR3SQXF72LSGAEPLFGLWY33WCCMXLDQ # core, Secret orderassist-nats-core
+                  - nkey: UACRUFP2VZE77NBOHX5S6C77TKIDYZZMY4LMQTR2X7GLOLWFWPAZLOXJ # voice agent, Secret orderassist-nats-voice-agent
                     permissions:
                       # The tool calls, and their replies on its inbox.
                       publish:
