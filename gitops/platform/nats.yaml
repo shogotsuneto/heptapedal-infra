@@ -106,7 +106,7 @@ spec:
                         allow: ["orderassist.v1.>"]
                       subscribe:
                         allow: ["_INBOX.>"]
-                  - nkey: UCVDZGQCVPPHKMQGME6HPN62RBZY5QB7GO4REGNO6AHT5UD6XB4YCAD4 # print worker, on the restaurant's device
+                  - nkey: UBOTD475XOO6Y6FRNIUMBGVNOAZ7RGTOSOC66EIWO5VUULBR5J7WRRYY # print worker, on the restaurant's device
                     permissions:
                       # Its durable consumer `printer` on ORDERS, its
                       # acknowledgements, and its delivery events; the JetStream
