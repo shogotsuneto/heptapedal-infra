@@ -247,56 +247,78 @@ chart version `app.yaml` pins published. Run everything from the repository
 root, with `direnv allow` done, so `kubeseal` reaches this cluster and `tofu`
 reads the state.
 
-The commands are for zsh. The values are generated or typed inside the
-pipelines and never touch the disk; `read -rs` keeps the typed ones out of the
-shell's history. One helper, `seal NAME`, seals the Secret `kubectl create`
-pipes into it as `gitops/apps/orderassist/NAME.sealed.yaml`, in the shape every
-sealed file here has:
+The commands are for zsh, and every step can be run again: a step either
+finishes or leaves the files as they were, and running it again replaces its
+Secret with a new one consistently (for the NATS users, the seed and its
+public key together). The values are generated or typed inside the pipelines
+and never touch the disk; `read -rs` keeps the typed ones out of the shell's
+history.
+
+Two helpers. `seal NAME` seals the Secret `kubectl create` pipes into it as
+`gitops/apps/orderassist/NAME.sealed.yaml`, in the shape every sealed file here
+has, and replaces the file only if sealing succeeded. `set_nkey TAG KEY` puts
+the public key on the user in `nats.yaml` whose comment contains `TAG`,
+whatever key is there now:
 
 ```zsh
 seal() {
-  kubeseal --format yaml \
+  setopt local_options pipe_fail
+  local out="gitops/apps/orderassist/$1.sealed.yaml"
+  if kubeseal --format yaml \
     | kubectl annotate --local -f - -o yaml \
         argocd.argoproj.io/sync-wave=0 \
         argocd.argoproj.io/sync-options=SkipDryRunOnMissingResource=true \
-    > "gitops/apps/orderassist/$1.sealed.yaml"
+    > "$out.new" && [[ -s "$out.new" ]]; then
+    mv "$out.new" "$out" && echo "sealed $1"
+  else
+    rm -f "$out.new"; echo "$1 NOT sealed; $out unchanged"; return 1
+  fi
+}
+
+set_nkey() {
+  [[ $2 == U?(#c55) ]] || { echo "not a user public key: $2"; return 1; }
+  TAG=$1 KEY=$2 perl -pi -e 's/nkey: \S+(?= # .*\Q$ENV{TAG}\E)/nkey: $ENV{KEY}/' \
+    gitops/platform/nats.yaml
+  grep -q "nkey: $2 # .*$1" gitops/platform/nats.yaml && echo "nats.yaml: $1 set" \
+    || { echo "nats.yaml: no user tagged $1"; return 1; }
 }
 ```
 
+`set_nkey` checks the key's shape with zsh's extended globbing, so turn it on
+first: `setopt extended_glob`.
+
 **1. The core's and the voice agent's NATS users.** As
 [platform/README](../platform/README.md#adding-an-application) does it, one
-user per service: the seed is sealed, and the public key replaces its
-placeholder in `nats.yaml`. A service whose placeholder is already gone is
-skipped, so running the loop again cannot seal a seed whose public key never
-reaches `nats.yaml`. To replace a key, put the placeholder back first.
-
-If a service is refused anyway, NATS's log names the public key the client
-sent (`authentication error - Nkey "U…"`), which is the one its sealed seed
-belongs to.
+user per service: the seed is sealed, and only then does its public key go
+into `nats.yaml`, so the two always belong together.
 
 ```zsh
 for service in core voice-agent; do
-  placeholder="REPLACE_WITH_$(tr a-z- A-Z_ <<<"$service")_PUBLIC_KEY"
-  grep -q "$placeholder" gitops/platform/nats.yaml || { echo "$service: already done"; continue; }
   keys=$(nats auth nkey gen user --public)
   kubectl create secret generic "orderassist-nats-$service" -n orderassist \
     --dry-run=client -o yaml \
     --from-literal=nats.nk="$(sed -n 1p <<<"$keys")" \
-    | seal "orderassist-nats-$service"
-  perl -pi -e "s/$placeholder/$(sed -n 2p <<<"$keys")/" gitops/platform/nats.yaml
+    | seal "orderassist-nats-$service" \
+    && set_nkey "Secret orderassist-nats-$service" "$(sed -n 2p <<<"$keys")"
 done
+unset keys
 ```
+
+If a service is refused anyway, NATS's log names the public key the client
+sent (`authentication error - Nkey "U…"`), which is the one its sealed seed
+belongs to; `set_nkey` with that key repairs it without resealing.
 
 **2. The print worker's NATS user.** A device, as in
 [platform/README](../platform/README.md#adding-a-device): its seed is created
 where the worker will run and stays there, so it is never sealed. Until it runs
-at the restaurant, that is this laptop:
+at the restaurant, that is this laptop. The seed is made only if there is none
+yet, and its public key is set either way:
 
 ```zsh
+seed=~/.config/nats/orderassist-print-worker.nk
 mkdir -p ~/.config/nats && chmod 700 ~/.config/nats
-(umask 077; nats auth nkey gen user --output ~/.config/nats/orderassist-print-worker.nk)
-perl -pi -e "s/REPLACE_WITH_PRINT_WORKER_PUBLIC_KEY/$(nats auth nkey show ~/.config/nats/orderassist-print-worker.nk)/" \
-  gitops/platform/nats.yaml
+[[ -s $seed ]] || (umask 077; nats auth nkey gen user --output $seed)
+set_nkey 'print worker' "$(nats auth nkey show $seed)"
 ```
 
 **3. The core's database URL and staff password.** The password is the one
@@ -304,37 +326,50 @@ staff sign in to `/staff` with; changing it later signs every member of staff
 out.
 
 ```zsh
+url=$(tofu -chdir=terraform/platform output -raw orderassist_database_url)
 read -rs 'STAFF_PASSWORD?Staff password: '; echo
-kubectl create secret generic orderassist-core -n orderassist \
-  --dry-run=client -o yaml \
-  --from-literal=DATABASE_URL="$(tofu -chdir=terraform/platform output -raw orderassist_database_url)" \
-  --from-literal=STAFF_PASSWORD="$STAFF_PASSWORD" \
-  | seal orderassist-core
-unset STAFF_PASSWORD
+if [[ $url == postgresql://* && -n $STAFF_PASSWORD ]]; then
+  kubectl create secret generic orderassist-core -n orderassist \
+    --dry-run=client -o yaml \
+    --from-literal=DATABASE_URL="$url" \
+    --from-literal=STAFF_PASSWORD="$STAFF_PASSWORD" \
+    | seal orderassist-core
+else
+  echo "no database URL or no password; nothing sealed"
+fi
+unset url STAFF_PASSWORD
 ```
 
 **4. The voice agent's OpenAI API key.**
 
 ```zsh
 read -rs 'OPENAI_API_KEY?OpenAI API key: '; echo
-kubectl create secret generic orderassist-voice-agent -n orderassist \
-  --dry-run=client -o yaml \
-  --from-literal=OPENAI_API_KEY="$OPENAI_API_KEY" \
-  | seal orderassist-voice-agent
+if [[ -n $OPENAI_API_KEY ]]; then
+  kubectl create secret generic orderassist-voice-agent -n orderassist \
+    --dry-run=client -o yaml \
+    --from-literal=OPENAI_API_KEY="$OPENAI_API_KEY" \
+    | seal orderassist-voice-agent
+else
+  echo "no key; nothing sealed"
+fi
 unset OPENAI_API_KEY
 ```
 
 **5. The conversation signing key pair.** Ed25519: the core signs each
 conversation's token with the private key, and the voice agent, which gets only
-the public one, verifies it. Both come from one key generated in the pipeline:
+the public one, verifies it. Both come from one key generated in the pipeline;
+running this again replaces the pair, which ends only the conversations under
+way.
 
 ```zsh
 private=$(openssl genpkey -algorithm ed25519)
-kubectl create secret generic orderassist-conversation-key -n orderassist \
-  --dry-run=client -o yaml \
-  --from-literal=private.pem="$private" \
-  --from-literal=public.pem="$(openssl pkey -pubout <<<"$private")" \
-  | seal orderassist-conversation-key
+if [[ -n $private ]]; then
+  kubectl create secret generic orderassist-conversation-key -n orderassist \
+    --dry-run=client -o yaml \
+    --from-literal=private.pem="$private" \
+    --from-literal=public.pem="$(openssl pkey -pubout <<<"$private")" \
+    | seal orderassist-conversation-key
+fi
 unset private
 ```
 
@@ -344,12 +379,16 @@ touches all three.
 
 ```zsh
 read -rs 'GHCR_TOKEN?GHCR token: '; echo
-kubectl create secret docker-registry ghcr -n orderassist \
-  --dry-run=client -o yaml \
-  --docker-server=ghcr.io \
-  --docker-username=shogotsuneto \
-  --docker-password="$GHCR_TOKEN" \
-  | seal ghcr
+if [[ -n $GHCR_TOKEN ]]; then
+  kubectl create secret docker-registry ghcr -n orderassist \
+    --dry-run=client -o yaml \
+    --docker-server=ghcr.io \
+    --docker-username=shogotsuneto \
+    --docker-password="$GHCR_TOKEN" \
+    | seal ghcr
+else
+  echo "no token; nothing sealed"
+fi
 unset GHCR_TOKEN
 ```
 
