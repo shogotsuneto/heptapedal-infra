@@ -68,3 +68,13 @@ resource "digitalocean_record" "nats" {
   value  = "${var.domain}."
   ttl    = var.apex_ttl
 }
+
+# orderassist, on the same Gateway and wildcard listener, and a CNAME to the
+# apex for the same reason.
+resource "digitalocean_record" "orderassist" {
+  domain = digitalocean_domain.heptapedal.id
+  type   = "CNAME"
+  name   = "orderassist"
+  value  = "${var.domain}."
+  ttl    = var.apex_ttl
+}
