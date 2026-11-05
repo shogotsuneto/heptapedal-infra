@@ -220,3 +220,177 @@ rather than an exception to it: the invariant is that a sealed value is never
 its own only copy, and this one's home is the database itself, where it can be
 reset and re-read. The Supabase values have their home in the Supabase console
 for the same reason.
+
+## orderassist
+
+A voice ordering assistant: its core and its voice agent, released together as
+one chart at `orderassist.heptapedal.com`. Its print worker runs at the
+restaurant and comes in over `wss://nats.heptapedal.com`.
+
+| Wave | What |
+|---|---|
+| -1 | `orderassist` namespace |
+| 0 | five Secrets, and the `ghcr` pull credential |
+| 1 | `orderassist` |
+
+The chart creates none of what it depends on. From this repository: the
+Secrets below, the `ORDERASSIST` account in
+[`../platform/nats.yaml`](../platform/nats.yaml), and the database in
+[`terraform/platform`](../../terraform/platform/README.md#orderassists-database).
+It has no migration Job — the core migrates its database itself when it
+starts — so the waves only keep a stale seal from letting it deploy.
+
+### Sealing its Secrets
+
+Before starting: the database applied and `sql/orderassist.sql` run, and the
+chart version `app.yaml` pins published. Run everything from the repository
+root, with `direnv allow` done, so `kubeseal` reaches this cluster and `tofu`
+reads the state.
+
+The commands are for zsh. The values are generated or typed inside the
+pipelines and never touch the disk; `read -rs` keeps the typed ones out of the
+shell's history. One helper, `seal NAME`, seals the Secret `kubectl create`
+pipes into it as `gitops/apps/orderassist/NAME.sealed.yaml`, in the shape every
+sealed file here has:
+
+```zsh
+seal() {
+  kubeseal --format yaml \
+    | kubectl annotate --local -f - -o yaml \
+        argocd.argoproj.io/sync-wave=0 \
+        argocd.argoproj.io/sync-options=SkipDryRunOnMissingResource=true \
+    > "gitops/apps/orderassist/$1.sealed.yaml"
+}
+```
+
+**1. The core's and the voice agent's NATS users.** As
+[platform/README](../platform/README.md#adding-an-application) does it, one
+user per service: the seed is sealed, and the public key replaces its
+placeholder in `nats.yaml`.
+
+```zsh
+for service in core voice-agent; do
+  keys=$(nats auth nkey gen user --public)
+  kubectl create secret generic "orderassist-nats-$service" -n orderassist \
+    --dry-run=client -o yaml \
+    --from-literal=nats.nk="$(sed -n 1p <<<"$keys")" \
+    | seal "orderassist-nats-$service"
+  placeholder="REPLACE_WITH_$(tr a-z- A-Z_ <<<"$service")_PUBLIC_KEY"
+  perl -pi -e "s/$placeholder/$(sed -n 2p <<<"$keys")/" gitops/platform/nats.yaml
+done
+```
+
+**2. The print worker's NATS user.** A device, as in
+[platform/README](../platform/README.md#adding-a-device): its seed is created
+where the worker will run and stays there, so it is never sealed. Until it runs
+at the restaurant, that is this laptop:
+
+```zsh
+mkdir -p ~/.config/nats && chmod 700 ~/.config/nats
+(umask 077; nats auth nkey gen user --output ~/.config/nats/orderassist-print-worker.nk)
+perl -pi -e "s/REPLACE_WITH_PRINT_WORKER_PUBLIC_KEY/$(nats auth nkey show ~/.config/nats/orderassist-print-worker.nk)/" \
+  gitops/platform/nats.yaml
+```
+
+**3. The core's database URL and staff password.** The password is the one
+staff sign in to `/staff` with; changing it later signs every member of staff
+out.
+
+```zsh
+read -rs 'STAFF_PASSWORD?Staff password: '; echo
+kubectl create secret generic orderassist-core -n orderassist \
+  --dry-run=client -o yaml \
+  --from-literal=DATABASE_URL="$(tofu -chdir=terraform/platform output -raw orderassist_database_url)" \
+  --from-literal=STAFF_PASSWORD="$STAFF_PASSWORD" \
+  | seal orderassist-core
+unset STAFF_PASSWORD
+```
+
+**4. The voice agent's OpenAI API key.**
+
+```zsh
+read -rs 'OPENAI_API_KEY?OpenAI API key: '; echo
+kubectl create secret generic orderassist-voice-agent -n orderassist \
+  --dry-run=client -o yaml \
+  --from-literal=OPENAI_API_KEY="$OPENAI_API_KEY" \
+  | seal orderassist-voice-agent
+unset OPENAI_API_KEY
+```
+
+**5. The conversation signing key pair.** Ed25519: the core signs each
+conversation's token with the private key, and the voice agent, which gets only
+the public one, verifies it. Both come from one key generated in the pipeline:
+
+```zsh
+private=$(openssl genpkey -algorithm ed25519)
+kubectl create secret generic orderassist-conversation-key -n orderassist \
+  --dry-run=client -o yaml \
+  --from-literal=private.pem="$private" \
+  --from-literal=public.pem="$(openssl pkey -pubout <<<"$private")" \
+  | seal orderassist-conversation-key
+unset private
+```
+
+**6. The pull credential**, the same classic PAT as heptapedal's
+([the pull credential](#the-pull-credential)): a third copy, so a rotation
+touches all three.
+
+```zsh
+read -rs 'GHCR_TOKEN?GHCR token: '; echo
+kubectl create secret docker-registry ghcr -n orderassist \
+  --dry-run=client -o yaml \
+  --docker-server=ghcr.io \
+  --docker-username=shogotsuneto \
+  --docker-password="$GHCR_TOKEN" \
+  | seal ghcr
+unset GHCR_TOKEN
+```
+
+**Check, then commit** the six files and `nats.yaml`:
+
+```zsh
+grep -c REPLACE_WITH gitops/platform/nats.yaml
+grep -E '^    [A-Za-z._]+: Ag' gitops/apps/orderassist/*.sealed.yaml | cut -d: -f1,2
+grep 'type:' gitops/apps/orderassist/ghcr.sealed.yaml
+for f in gitops/apps/orderassist/*.sealed.yaml; do kubeseal --validate < $f && echo "$f valid"; done
+```
+
+The first should print `0`. The second should list, by file: `DATABASE_URL`
+and `STAFF_PASSWORD`; `OPENAI_API_KEY`; `private.pem` and `public.pem`;
+`nats.nk` twice; and `.dockerconfigjson`. The third should print
+`kubernetes.io/dockerconfigjson`, and the loop should call every file valid,
+meaning this cluster's controller can decrypt it.
+
+### Where its values come from
+
+None of them is a sealed value's only copy that matters
+([ADR 0007](../../docs/adr/0007-secrets-sealed-secrets.md)): each is in the
+service that owns it, or is replaced by generating it again.
+
+| Value | Its home |
+|---|---|
+| `DATABASE_URL` | Terraform state, `orderassist_database_url`; the role's password can be reset in the console |
+| `STAFF_PASSWORD` | the operator's password manager; a new one only signs staff out |
+| `OPENAI_API_KEY` | the OpenAI platform, where a new key is issued |
+| the conversation key pair | none: regenerating it ends the conversations under way, whose tokens it signed, and nothing else |
+| the NATS seeds | none: a new seed and its public key in `nats.yaml`, as for heptapedal's |
+| the print worker's seed | the device it runs on, never sealed |
+| `ghcr` | the classic PAT, as heptapedal's |
+
+### After it syncs
+
+```zsh
+kubectl -n orderassist get pods
+curl -s https://orderassist.heptapedal.com/healthz
+curl -si https://orderassist.heptapedal.com/ws | head -1
+kubectl -n orderassist get httproute orderassist -o jsonpath='{.status.parents[0].conditions[*].type}'
+```
+
+The core and the voice agent should be Running and Ready; `/healthz` should
+answer `{"nats":"ok","postgres":"ok"}`; `/ws` without a conversation token
+should be refused with 403; and the route should be `Accepted` and
+`ResolvedRefs`.
+
+A core that cannot reach NATS or Postgres keeps retrying and answers
+`/healthz` with 503, so the first thing to read is its log:
+`kubectl -n orderassist logs deploy/orderassist-core`.

@@ -1,0 +1,16 @@
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "0"
+  name: ghcr
+  namespace: orderassist
+spec:
+  encryptedData:
+    .dockerconfigjson: AgBNCO8TgjmaLF2pdywsbRVNzjnSOfy9f8fAIEka2lmhjbguUDCZAZhUPl9FCIujxPIZNrlNc99+eJj2M/NTP4LK2THL7YbxCJreRVxq8z4Dxlr8eJ/p05Xl+eBGbe/C1oCziDn5l4PufXWUar124aDU36S8aHU9tceT7JFuVv1XKzD6mNTlAWI3FESgUba1zmmEBY7ptLJGVWwWK7TiDB0J6PRmPJGGE/VXjzhm/xX/MbLs0sUOwvIV5kUWqmgtlAas7HvpQrHoMQP+RmHZ9JK55LiufPklHCcAgdUkhodthJZTUccusn6zJgt2riS9H+YAh+7lEhlqsEQMlWmfnHT1QQziGbjArNMhVP31hbRtT51Sr0Ttx9hTRcoieFBJcL0M8MNAX+OUpSjp2bqMgqc7F3Rk8CDPUg/bxj8KtDDZ9Qm1/F47IruhgQtCmcuhBTwy8KpRhGcUaX4SpmA6Li86GndK2YXGPHwqrBMjp55iKxxE2gcjaNmTfa9bwpeVquE4tDhgH1mqK5wH/cTVgN7lzmedEZxF9lZkL5QkKPioKoDPnVj5oMQrmua75LfDJ52iLSn5CWFPUm5otOb7rRmt3Lg0guvttzJCvVsNzSRfzWHRAsxESV6oT0UaWm0eK5SOfPA8TwF+l3yK6sKIVsC1jwh9joQQEv5DsIJVD+dkxms3ink7tTy0CZoN68Kl5WSrNc999EQWyzjj6TuDSjF5l38g1q+rGcFO4Q0gtkiaXpH3ZsR7ZAX8jzat0jtf7Yx5NiapbJeEgNxH2FTL0BFwqOFNaw0tXomko0bpIDqHQaxMFXvNhVIKBk0eYSkP84Clh3LBjJZySlRTpJXMIrAnYflJ8HzQlqmq9dnV+m1OdfjnjVVRojjeR+ZL4Jyx0U/GTS4VtIb6MHgMV76dU3EZxu/BRpNSlcWeNlvz8d9BflpTo5q1BwRFJA==
+  template:
+    metadata:
+      name: ghcr
+      namespace: orderassist
+    type: kubernetes.io/dockerconfigjson

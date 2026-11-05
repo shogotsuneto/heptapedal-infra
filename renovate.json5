@@ -88,6 +88,7 @@
       matchPackageNames: [
         "ghcr.io/shogotsuneto/charts/heptapedal-app",
         "ghcr.io/shogotsuneto/charts/heptapedal-embeddings",
+        "ghcr.io/shogotsuneto/charts/orderassist",
       ],
       enabled: false,
     },

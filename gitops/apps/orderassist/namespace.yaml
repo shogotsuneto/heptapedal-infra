@@ -1,0 +1,9 @@
+# Where orderassist runs. Declared here, at wave -1, for the same reason as
+# heptapedal's: its SealedSecrets are scheduled ahead of the Application and
+# need the namespace first.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: orderassist
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"

@@ -101,8 +101,7 @@ resource "digitalocean_database_user" "agent_auth" {
   }
 }
 
-# orderassist (shogotsuneto/F26_4495_S2_ShogoT), a second application on the
-# platform. Its own database and role on the same instance, for the reason
+# orderassist, a second application on the platform. Its own database and role on the same instance, for the reason
 # agent-auth has them: no application holds another's credentials, and a
 # second cluster would double the bill. Its core runs its own migrations at
 # start, so the grants it needs come from sql/orderassist.sql. See README.md.
