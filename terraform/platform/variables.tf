@@ -92,6 +92,21 @@ variable "agent_auth_database_user" {
   default     = "agent_auth_user"
 }
 
+variable "orderassist_database_name" {
+  description = <<-EOT
+    orderassist's database: a second application on the same cluster, sharing
+    no database and no role with heptapedal.
+  EOT
+  type        = string
+  default     = "orderassist"
+}
+
+variable "orderassist_database_user" {
+  description = "Role orderassist's core connects as. Can reach its own database and no other."
+  type        = string
+  default     = "orderassist_user"
+}
+
 variable "node_size" {
   description = "Worker Droplet size. 3 of these is 72 USD/month — see ADR 0016's costing."
   type        = string

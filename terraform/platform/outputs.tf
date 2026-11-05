@@ -101,6 +101,21 @@ output "agent_auth_database_url" {
   sensitive = true
 }
 
+# What becomes DATABASE_URL in orderassist's sealed Secret, built the same way
+# against its own database and role.
+output "orderassist_database_url" {
+  description = "orderassist's DATABASE_URL, as orderassist_user over the private network."
+  value = format(
+    "postgresql://%s:%s@%s:%d/%s?sslmode=require",
+    digitalocean_database_user.orderassist.name,
+    digitalocean_database_user.orderassist.password,
+    digitalocean_database_cluster.heptapedal.private_host,
+    digitalocean_database_cluster.heptapedal.port,
+    digitalocean_database_db.orderassist.name,
+  )
+  sensitive = true
+}
+
 # doadmin, for the one-time bootstrap in README.md — creating extensions needs
 # more than the application's role has. Not for the application to use.
 output "database_admin_url" {

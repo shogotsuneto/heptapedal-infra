@@ -101,6 +101,27 @@ resource "digitalocean_database_user" "agent_auth" {
   }
 }
 
+# orderassist (shogotsuneto/F26_4495_S2_ShogoT), a second application on the
+# platform. Its own database and role on the same instance, for the reason
+# agent-auth has them: no application holds another's credentials, and a
+# second cluster would double the bill. Its core runs its own migrations at
+# start, so the grants it needs come from sql/orderassist.sql. See README.md.
+resource "digitalocean_database_db" "orderassist" {
+  cluster_id = digitalocean_database_cluster.heptapedal.id
+  name       = var.orderassist_database_name
+}
+
+resource "digitalocean_database_user" "orderassist" {
+  cluster_id = digitalocean_database_cluster.heptapedal.id
+  name       = var.orderassist_database_user
+
+  lifecycle {
+    # The same digitalocean/terraform-provider-digitalocean#1437 workaround as
+    # `app` above, and to be dropped with it.
+    ignore_changes = [settings]
+  }
+}
+
 # Trusts the Kubernetes cluster as a resource, not as a set of addresses. Node
 # IPs are ephemeral — an allowlist of them would rot on the first node
 # replacement, and silently, since the symptom is the application failing to
