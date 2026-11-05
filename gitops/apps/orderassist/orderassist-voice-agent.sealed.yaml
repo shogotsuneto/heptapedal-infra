@@ -1,0 +1,15 @@
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "0"
+  name: orderassist-voice-agent
+  namespace: orderassist
+spec:
+  encryptedData:
+    OPENAI_API_KEY: AgAfHoo6FbocYWVEnDP5iFQqJ5yjIZU+z/8ixV5rFJb33vDEK90VdfJxzWp83wHT4NQdcPL+H+9i21LibyHn3sHHX32CHy8zFr1wL2KmE6LZwjWRTN7ifZjwzr5cWQIeEsSXf1ok671vOKX9A+af2xxzvoz2ZCVkMxBn/wK/bk7eg+fIT8Zok18yzjn61fAVlReoTZJNiylrnGSPxho7Q9yzgf09ahQHPo4i6Hngx8ue9RClh1+StFSpS7bWmC50kXd9Jm7A8daLecC/Ifq+Av++L2rMIOhVW4jkXkEElTAVsnJV4cLwVjs7ZqsstvVLm2tuOpAp98Sqkt3P5Ie6YWy3VvrJhN1CRnbW6ALCeC9t1c1cMd4HUEqPqnM/+wT73IxsZHTKB+fmfX+zJNv6yk6rbMnicNEwfDj7TakJkmGf0JSfPxL1/R7BfGq1bcRtdEiTvsLeQLA1Qu1MQALw2PYAXvI3OYxODJDGYpazYRwNN7BDxi2elL6NZ4ni2+XFoNDgg/SqPzF6+od4urpY4uYiwq56a2HFiWDGNTiuTXclZ0BmvndYf08J5bOjJS0sL4ZXxXY/l6fIDCH/+Jm/RT0JPWxxN/J8b8BhNjIZkj0ZkXWWuwMO8JunQMoLUQd2CMLHUIulHRA9KO3WSfjbRxXtAocfMSCamCT+1+Zmrg/MnKdZEcyqW66wT8Q+paXs4CvssdFs7qC0+Na+5E037hGnmMgdB9tHHXCH0mwXXMKgQoqiyJ2MLV45JU6kRDuJWgStdn4znP6jCRCINCBcouJ7SBHePTG/S1bZOHYQdybCkCR8YLb0ytFmpneaipFY+q+GpSVWC+atI+5uGoUy+klYI3xK1DF48n1JuW2iXUUNf0D7Vbd1UyLGZOKErt2Uhhsdd1jvgVaOvEIncwEfv+dsdzgiSvzqqw==
+  template:
+    metadata:
+      name: orderassist-voice-agent
+      namespace: orderassist

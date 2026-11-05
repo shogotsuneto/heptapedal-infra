@@ -1,0 +1,15 @@
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+    argocd.argoproj.io/sync-wave: "0"
+  name: orderassist-nats-core
+  namespace: orderassist
+spec:
+  encryptedData:
+    nats.nk: AgBJmtV9lbbgGLBIeEjpseqBCCKUcMAU8Ho1QLBqr1TQHLITHmK84FQjYg5etMzasXgXVPfvZevRSiqdrSrVsb4m8T8dkYzeSZ/sAxV4/gijEPLb7Byfz3ddWtfyoEOf358VcvOwoXmVzqOSHxtE2RFuwctMVbku4m/yy1PuGk8t1u0NEGo5K8seG03T6iQU5AKJT/seHPwNzQcEtrh94CL22Qc2tGz4qKb48ZhGJbtM86enO0M21WmqetCKMvB7FxPLuHhuA2IzfCKIL6jxIACsNLj1iSSlJ5k+deCsLRD3PWkbDU3JG6v21pmJQSypL5v58cLRKrdVgMi9Jy3voAVhV+ZmODISnXhH9GbOOgRqCZ+IH/vy9sC3ZCfyYnUvz+jEfH7ljN9BTccpfdM3oWlU2rnfgBaOeR5K5iqQAxKpKzio9ymZ8zFixlIvTcIhxHvthx4BznU/AcCrO78H30dupUbs8Gv06B7wHaqnDhRybCcMYOJ15mBgrQ0VG7AiN9Msoe0O94JqrUOBN9JmCHIS/9KGJ5L+tf6LiKfs9CS9jAQHRVQT6MKlYgKxtS9Xf3N9yGzgjOQ1Ju9dgcH7iVD67VFFW+mRV0Tcb7TW2rSAMvJdMTRnD00O6x+GE1rvel+GtD1Xb6dybrRVF/i/RVZD6vkX/I7OpfAF+XZpBizvEk990uWJdTzUkIMYWyT2BKQjh2B2BlbgIp7at6gDj1PYYv+TGZEIpH2cRxnG612ykk69DUARTXt66ZTJKd9irWwETpXREsfZSuh2
+  template:
+    metadata:
+      name: orderassist-nats-core
+      namespace: orderassist

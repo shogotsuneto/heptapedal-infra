@@ -98,15 +98,15 @@ spec:
                   max_mem: << 16MB >>
                   max_streams: 10
                 users:
-                  - nkey: REPLACE_WITH_CORE_PUBLIC_KEY # core, Secret orderassist-nats-core
-                  - nkey: REPLACE_WITH_VOICE_AGENT_PUBLIC_KEY # voice agent, Secret orderassist-nats-voice-agent
+                  - nkey: UD6EB4PK4GRP4QSYBBE2QTOZP2BIFN4CGTEXYXLFW3JJQZWYUWMUD36D # core, Secret orderassist-nats-core
+                  - nkey: UBDTFRQVAQPGVGZFUIHGYFDZSAMI4MOCCASJ2YLRBK6MJ6CNOD43FQ6L # voice agent, Secret orderassist-nats-voice-agent
                     permissions:
                       # The tool calls, and their replies on its inbox.
                       publish:
                         allow: ["orderassist.v1.>"]
                       subscribe:
                         allow: ["_INBOX.>"]
-                  - nkey: REPLACE_WITH_PRINT_WORKER_PUBLIC_KEY # print worker, on the restaurant's device
+                  - nkey: UCVDZGQCVPPHKMQGME6HPN62RBZY5QB7GO4REGNO6AHT5UD6XB4YCAD4 # print worker, on the restaurant's device
                     permissions:
                       # Its durable consumer `printer` on ORDERS, its
                       # acknowledgements, and its delivery events; the JetStream
