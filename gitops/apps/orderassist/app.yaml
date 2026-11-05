@@ -1,12 +1,10 @@
-# orderassist: a voice ordering assistant for dine-in guests — its core and its
-# voice agent, released together as one chart (shogotsuneto/F26_4495_S2_ShogoT).
-# Wave 1, after its SealedSecrets at wave 0.
+# orderassist: a voice ordering assistant — its core and its voice agent,
+# released together as one chart. Wave 1, after its SealedSecrets at wave 0.
 #
 # The chart creates nothing it depends on. From this repository it needs:
 # the Secrets in this directory, the ORDERASSIST account in
 # ../../platform/nats.yaml, the database from terraform/platform, and the
-# Gateway. Its own README lists them:
-# Implementation/deploy/helm/orderassist/README.md in that repository.
+# Gateway. See ../README.md, "orderassist".
 #
 # Its defaults are already this cluster's: the host orderassist.heptapedal.com,
 # NATS at nats.nats.svc, and the Secret names sealed here. The published chart

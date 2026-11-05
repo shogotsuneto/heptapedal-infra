@@ -129,8 +129,7 @@ agent-auth's sealed Secret.
 
 ### orderassist's database
 
-orderassist ([shogotsuneto/F26_4495_S2_ShogoT](https://github.com/shogotsuneto/F26_4495_S2_ShogoT))
-has its own database and role on the same cluster, `orderassist` and
+orderassist, the second application on the platform, has its own database and role on the same cluster, `orderassist` and
 `orderassist_user`. Its core runs its migrations itself when it starts, with no
 Job, so until this has run it keeps retrying and reports itself unhealthy
 rather than holding up a sync.

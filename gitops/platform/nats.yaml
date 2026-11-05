@@ -92,8 +92,6 @@ spec:
               # orderassist (gitops/apps/orderassist). One user per service, each
               # allowed only what it does; the core declares the streams and
               # serves the voice agent's tool calls, so it has the whole account.
-              # The same permissions as the chart's Kind check
-              # (deploy/kind/nats-values.yaml.gotmpl in its repository).
               ORDERASSIST:
                 jetstream:
                   max_file: << 512MB >>

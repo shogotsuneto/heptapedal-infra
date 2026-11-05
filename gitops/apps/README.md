@@ -223,11 +223,9 @@ for the same reason.
 
 ## orderassist
 
-A voice ordering assistant for dine-in guests
-([shogotsuneto/F26_4495_S2_ShogoT](https://github.com/shogotsuneto/F26_4495_S2_ShogoT)):
-its core and its voice agent, released together as one chart at
-`orderassist.heptapedal.com`. Its print worker runs at the restaurant and comes
-in over `wss://nats.heptapedal.com`.
+A voice ordering assistant: its core and its voice agent, released together as
+one chart at `orderassist.heptapedal.com`. Its print worker runs at the
+restaurant and comes in over `wss://nats.heptapedal.com`.
 
 | Wave | What |
 |---|---|
@@ -235,9 +233,8 @@ in over `wss://nats.heptapedal.com`.
 | 0 | five Secrets, and the `ghcr` pull credential |
 | 1 | `orderassist` |
 
-The chart creates none of what it depends on; its
-[README](https://github.com/shogotsuneto/F26_4495_S2_ShogoT/blob/main/Implementation/deploy/helm/orderassist/README.md)
-lists it. From this repository: the Secrets below, the `ORDERASSIST` account in
+The chart creates none of what it depends on. From this repository: the
+Secrets below, the `ORDERASSIST` account in
 [`../platform/nats.yaml`](../platform/nats.yaml), and the database in
 [`terraform/platform`](../../terraform/platform/README.md#orderassists-database).
 It has no migration Job — the core migrates its database itself when it
@@ -368,7 +365,7 @@ service that owns it, or is replaced by generating it again.
 | Value | Its home |
 |---|---|
 | `DATABASE_URL` | Terraform state, `orderassist_database_url`; the role's password can be reset in the console |
-| `STAFF_PASSWORD` | the student's password manager; a new one only signs staff out |
+| `STAFF_PASSWORD` | the operator's password manager; a new one only signs staff out |
 | `OPENAI_API_KEY` | the OpenAI platform, where a new key is issued |
 | the conversation key pair | none: regenerating it ends the conversations under way, whose tokens it signed, and nothing else |
 | the NATS seeds | none: a new seed and its public key in `nats.yaml`, as for heptapedal's |
