@@ -266,16 +266,23 @@ seal() {
 **1. The core's and the voice agent's NATS users.** As
 [platform/README](../platform/README.md#adding-an-application) does it, one
 user per service: the seed is sealed, and the public key replaces its
-placeholder in `nats.yaml`.
+placeholder in `nats.yaml`. A service whose placeholder is already gone is
+skipped, so running the loop again cannot seal a seed whose public key never
+reaches `nats.yaml`. To replace a key, put the placeholder back first.
+
+If a service is refused anyway, NATS's log names the public key the client
+sent (`authentication error - Nkey "U…"`), which is the one its sealed seed
+belongs to.
 
 ```zsh
 for service in core voice-agent; do
+  placeholder="REPLACE_WITH_$(tr a-z- A-Z_ <<<"$service")_PUBLIC_KEY"
+  grep -q "$placeholder" gitops/platform/nats.yaml || { echo "$service: already done"; continue; }
   keys=$(nats auth nkey gen user --public)
   kubectl create secret generic "orderassist-nats-$service" -n orderassist \
     --dry-run=client -o yaml \
     --from-literal=nats.nk="$(sed -n 1p <<<"$keys")" \
     | seal "orderassist-nats-$service"
-  placeholder="REPLACE_WITH_$(tr a-z- A-Z_ <<<"$service")_PUBLIC_KEY"
   perl -pi -e "s/$placeholder/$(sed -n 2p <<<"$keys")/" gitops/platform/nats.yaml
 done
 ```
