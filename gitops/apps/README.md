@@ -247,12 +247,14 @@ chart version `app.yaml` pins published. Run everything from the repository
 root, with `direnv allow` done, so `kubeseal` reaches this cluster and `tofu`
 reads the state.
 
-The values are generated or typed inside the pipelines and never touch the
-disk. `read -rs` keeps the typed ones out of the shell's history. One helper
-seals what `kubectl create` prints, in the shape every sealed file here has:
+The commands are for zsh. The values are generated or typed inside the
+pipelines and never touch the disk; `read -rs` keeps the typed ones out of the
+shell's history. One helper, `seal NAME`, seals the Secret `kubectl create`
+pipes into it as `gitops/apps/orderassist/NAME.sealed.yaml`, in the shape every
+sealed file here has:
 
-```bash
-seal() {  # seal NAME < Secret: writes gitops/apps/orderassist/NAME.sealed.yaml
+```zsh
+seal() {
   kubeseal --format yaml \
     | kubectl annotate --local -f - -o yaml \
         argocd.argoproj.io/sync-wave=0 \
@@ -266,7 +268,7 @@ seal() {  # seal NAME < Secret: writes gitops/apps/orderassist/NAME.sealed.yaml
 user per service: the seed is sealed, and the public key replaces its
 placeholder in `nats.yaml`.
 
-```bash
+```zsh
 for service in core voice-agent; do
   keys=$(nats auth nkey gen user --public)
   kubectl create secret generic "orderassist-nats-$service" -n orderassist \
@@ -283,7 +285,7 @@ done
 where the worker will run and stays there, so it is never sealed. Until it runs
 at the restaurant, that is this laptop:
 
-```bash
+```zsh
 mkdir -p ~/.config/nats && chmod 700 ~/.config/nats
 (umask 077; nats auth nkey gen user --output ~/.config/nats/orderassist-print-worker.nk)
 perl -pi -e "s/REPLACE_WITH_PRINT_WORKER_PUBLIC_KEY/$(nats auth nkey show ~/.config/nats/orderassist-print-worker.nk)/" \
@@ -294,8 +296,8 @@ perl -pi -e "s/REPLACE_WITH_PRINT_WORKER_PUBLIC_KEY/$(nats auth nkey show ~/.con
 staff sign in to `/staff` with; changing it later signs every member of staff
 out.
 
-```bash
-read -rs -p 'Staff password: ' STAFF_PASSWORD; echo
+```zsh
+read -rs 'STAFF_PASSWORD?Staff password: '; echo
 kubectl create secret generic orderassist-core -n orderassist \
   --dry-run=client -o yaml \
   --from-literal=DATABASE_URL="$(tofu -chdir=terraform/platform output -raw orderassist_database_url)" \
@@ -306,8 +308,8 @@ unset STAFF_PASSWORD
 
 **4. The voice agent's OpenAI API key.**
 
-```bash
-read -rs -p 'OpenAI API key: ' OPENAI_API_KEY; echo
+```zsh
+read -rs 'OPENAI_API_KEY?OpenAI API key: '; echo
 kubectl create secret generic orderassist-voice-agent -n orderassist \
   --dry-run=client -o yaml \
   --from-literal=OPENAI_API_KEY="$OPENAI_API_KEY" \
@@ -319,7 +321,7 @@ unset OPENAI_API_KEY
 conversation's token with the private key, and the voice agent, which gets only
 the public one, verifies it. Both come from one key generated in the pipeline:
 
-```bash
+```zsh
 private=$(openssl genpkey -algorithm ed25519)
 kubectl create secret generic orderassist-conversation-key -n orderassist \
   --dry-run=client -o yaml \
@@ -333,8 +335,8 @@ unset private
 ([the pull credential](#the-pull-credential)): a third copy, so a rotation
 touches all three.
 
-```bash
-read -rs -p 'GHCR token: ' GHCR_TOKEN; echo
+```zsh
+read -rs 'GHCR_TOKEN?GHCR token: '; echo
 kubectl create secret docker-registry ghcr -n orderassist \
   --dry-run=client -o yaml \
   --docker-server=ghcr.io \
@@ -346,15 +348,18 @@ unset GHCR_TOKEN
 
 **Check, then commit** the six files and `nats.yaml`:
 
-```bash
-grep -c REPLACE_WITH gitops/platform/nats.yaml        # 0
+```zsh
+grep -c REPLACE_WITH gitops/platform/nats.yaml
 grep -E '^    [A-Za-z._]+: Ag' gitops/apps/orderassist/*.sealed.yaml | cut -d: -f1,2
-grep 'type:' gitops/apps/orderassist/ghcr.sealed.yaml # kubernetes.io/dockerconfigjson
+grep 'type:' gitops/apps/orderassist/ghcr.sealed.yaml
+for f in gitops/apps/orderassist/*.sealed.yaml; do kubeseal --validate < $f && echo "$f valid"; done
 ```
 
-The second command should list, by file: `DATABASE_URL` and `STAFF_PASSWORD`;
-`OPENAI_API_KEY`; `private.pem` and `public.pem`; `nats.nk` twice; and
-`.dockerconfigjson`.
+The first should print `0`. The second should list, by file: `DATABASE_URL`
+and `STAFF_PASSWORD`; `OPENAI_API_KEY`; `private.pem` and `public.pem`;
+`nats.nk` twice; and `.dockerconfigjson`. The third should print
+`kubernetes.io/dockerconfigjson`, and the loop should call every file valid,
+meaning this cluster's controller can decrypt it.
 
 ### Where its values come from
 
@@ -374,12 +379,17 @@ service that owns it, or is replaced by generating it again.
 
 ### After it syncs
 
-```bash
-kubectl -n orderassist get pods                   # core and voice-agent Running, Ready
-curl -s https://orderassist.heptapedal.com/healthz  # {"nats":"ok","postgres":"ok"}
-curl -si https://orderassist.heptapedal.com/ws | head -1   # 403: no conversation token
+```zsh
+kubectl -n orderassist get pods
+curl -s https://orderassist.heptapedal.com/healthz
+curl -si https://orderassist.heptapedal.com/ws | head -1
 kubectl -n orderassist get httproute orderassist -o jsonpath='{.status.parents[0].conditions[*].type}'
 ```
+
+The core and the voice agent should be Running and Ready; `/healthz` should
+answer `{"nats":"ok","postgres":"ok"}`; `/ws` without a conversation token
+should be refused with 403; and the route should be `Accepted` and
+`ResolvedRefs`.
 
 A core that cannot reach NATS or Postgres keeps retrying and answers
 `/healthz` with 503, so the first thing to read is its log:
