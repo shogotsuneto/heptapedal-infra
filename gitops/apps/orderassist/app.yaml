@@ -1,0 +1,51 @@
+# orderassist: a voice ordering assistant for dine-in guests — its core and its
+# voice agent, released together as one chart (shogotsuneto/F26_4495_S2_ShogoT).
+# Wave 1, after its SealedSecrets at wave 0.
+#
+# The chart creates nothing it depends on. From this repository it needs:
+# the Secrets in this directory, the ORDERASSIST account in
+# ../../platform/nats.yaml, the database from terraform/platform, and the
+# Gateway. Its own README lists them:
+# Implementation/deploy/helm/orderassist/README.md in that repository.
+#
+# Its defaults are already this cluster's: the host orderassist.heptapedal.com,
+# NATS at nats.nats.svc, and the Secret names sealed here. The published chart
+# pins its images, so nothing here restates them.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: orderassist
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: ghcr.io/shogotsuneto/charts
+    chart: orderassist
+    # A release version, immutable (ADR 0011); dev versions are not deployed.
+    targetRevision: 0.1.1
+    helm:
+      valuesObject:
+        # Both images are private packages (ADR 0011).
+        imagePullSecrets:
+          - name: ghcr
+
+        # Attaches to the shared Gateway; the host is a subdomain, so the
+        # wildcard listener. /ws goes to the voice agent, everything else to the
+        # core, on the one host.
+        httpRoute:
+          enabled: true
+          parentRefs:
+            - name: heptapedal
+              namespace: gateway
+              sectionName: https-wildcard
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: orderassist
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

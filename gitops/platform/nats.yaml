@@ -89,6 +89,42 @@ spec:
                 users:
                   - nkey: UDBWUYNJKGDXVZYXXRAEQNLVQ2BCIGULRWCAZSJNN527CO4M4IMU2AY2 # laptop, ~/.config/nats/heptapedal.nk
 
+              # orderassist (gitops/apps/orderassist). One user per service, each
+              # allowed only what it does; the core declares the streams and
+              # serves the voice agent's tool calls, so it has the whole account.
+              # The same permissions as the chart's Kind check
+              # (deploy/kind/nats-values.yaml.gotmpl in its repository).
+              ORDERASSIST:
+                jetstream:
+                  max_file: << 512MB >>
+                  max_mem: << 16MB >>
+                  max_streams: 10
+                users:
+                  - nkey: REPLACE_WITH_CORE_PUBLIC_KEY # core, Secret orderassist-nats-core
+                  - nkey: REPLACE_WITH_VOICE_AGENT_PUBLIC_KEY # voice agent, Secret orderassist-nats-voice-agent
+                    permissions:
+                      # The tool calls, and their replies on its inbox.
+                      publish:
+                        allow: ["orderassist.v1.>"]
+                      subscribe:
+                        allow: ["_INBOX.>"]
+                  - nkey: REPLACE_WITH_PRINT_WORKER_PUBLIC_KEY # print worker, on the restaurant's device
+                    permissions:
+                      # Its durable consumer `printer` on ORDERS, its
+                      # acknowledgements, and its delivery events; the JetStream
+                      # API answers on its inbox.
+                      publish:
+                        allow:
+                          - "$JS.API.STREAM.INFO.ORDERS"
+                          - "$JS.API.CONSUMER.INFO.ORDERS.printer"
+                          - "$JS.API.CONSUMER.CREATE.ORDERS.printer"
+                          - "$JS.API.CONSUMER.CREATE.ORDERS.printer.>"
+                          - "$JS.API.CONSUMER.MSG.NEXT.ORDERS.printer"
+                          - "$JS.ACK.ORDERS.printer.>"
+                          - "orders.events.delivered"
+                      subscribe:
+                        allow: ["_INBOX.>"]
+
         container:
           env:
             # Lets the GC work toward the limit rather than past it.

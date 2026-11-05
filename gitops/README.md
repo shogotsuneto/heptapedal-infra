@@ -82,6 +82,11 @@ Two rules carry over from the ADR:
 | `platform/ghcr-registry.sealed.yaml` | `argocd` / `ghcr-charts` | GitHub → Settings → Developer settings → Tokens (classic), `read:packages` — see [platform/README](platform/README.md#the-ghcr-registry-credential) |
 | `apps/heptapedal/app-secrets.sealed.yaml` | `hepta` / `app-secrets` | `DATABASE_URL` from `tofu -chdir=terraform/platform output -raw database_url`; the Supabase values from the Supabase console — see [apps/README](apps/README.md#sealing-it) |
 | `apps/heptapedal/ghcr.sealed.yaml` | `hepta` / `ghcr` | The same classic PAT as the registry credential above — second copy, for the nodes rather than for rendering; see [apps/README](apps/README.md#the-pull-credential) |
+| `apps/orderassist/orderassist-core.sealed.yaml` | `orderassist` / `orderassist-core` | `DATABASE_URL` from `tofu -chdir=terraform/platform output -raw orderassist_database_url`; `STAFF_PASSWORD` from the student's password manager — see [apps/README](apps/README.md#sealing-its-secrets) |
+| `apps/orderassist/orderassist-voice-agent.sealed.yaml` | `orderassist` / `orderassist-voice-agent` | `OPENAI_API_KEY` from the OpenAI platform |
+| `apps/orderassist/orderassist-conversation-key.sealed.yaml` | `orderassist` / `orderassist-conversation-key` | Generated in the pipeline; replacing it costs only the conversations under way — see [apps/README](apps/README.md#where-its-values-come-from) |
+| `apps/orderassist/orderassist-nats-core.sealed.yaml`, `orderassist-nats-voice-agent.sealed.yaml` | `orderassist` / `orderassist-nats-core`, `orderassist-nats-voice-agent` | Generated in the pipeline; replaced with a new key, as for any application's NATS user ([platform/README](platform/README.md#adding-an-application)) |
+| `apps/orderassist/ghcr.sealed.yaml` | `orderassist` / `ghcr` | The same classic PAT again — third copy |
 
 Every `SealedSecret` committed here gets a row. A row without a recoverable
 source is the invariant being broken.
