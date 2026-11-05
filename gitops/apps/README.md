@@ -427,14 +427,17 @@ service that owns it, or is replaced by generating it again.
 ```zsh
 kubectl -n orderassist get pods
 curl -s https://orderassist.heptapedal.com/healthz
-curl -si https://orderassist.heptapedal.com/ws | head -1
+curl -si --http1.1 https://orderassist.heptapedal.com/ws \
+  -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+  -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' | head -1
 kubectl -n orderassist get httproute orderassist -o jsonpath='{.status.parents[0].conditions[*].type}'
 ```
 
 The core and the voice agent should be Running and Ready; `/healthz` should
-answer `{"nats":"ok","postgres":"ok"}`; `/ws` without a conversation token
-should be refused with 403; and the route should be `Accepted` and
-`ResolvedRefs`.
+answer `{"nats":"ok","postgres":"ok"}`; a WebSocket opened on `/ws` without a
+conversation token should be refused with 403 by the voice agent (a plain GET
+there gets 404, since it serves only the WebSocket); and the route should be
+`Accepted` and `ResolvedRefs`.
 
 A core that cannot reach NATS or Postgres keeps retrying and answers
 `/healthz` with 503, so the first thing to read is its log:
