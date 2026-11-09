@@ -13,12 +13,34 @@ useDefault = true
 [[rules]]
 id = "generic-api-key"
 
-  [rules.allowlist]
+  [[rules.allowlists]]
   description = """
     Sealed Secrets ciphertext. Encrypted to a key that exists only inside the
     cluster and is deliberately never backed up, so committing it is the design
     rather than a mistake. The plaintext of each is recoverable from the service
-    that owns it — see gitops/README.md.
+    that owns it — see gitops/README.md. AND, so that only ciphertext is
+    excused, not anything else that ends up in a .sealed.yaml.
   """
+  condition = "AND"
   paths = ['''\.sealed\.yaml$''']
   regexes = ['''Ag[A-Za-z0-9+/=]{100,}''']
+
+  [[rules.allowlists]]
+  description = """
+    NATS nkey *public* keys of users (prefix U, 56 base32 characters), which
+    the server config has to list in the clear — see the accounts block of
+    gitops/platform/nats.yaml. The matching seeds (prefix SU) stay sealed and
+    are deliberately not matched by this pattern, so a leaked seed is still
+    reported. AND, because the default OR would let a path match alone excuse
+    everything in the file, seeds included.
+  """
+  condition = "AND"
+  paths = ['''gitops/platform/nats\.yaml$''']
+  regexes = ['''^U[A-Z2-7]{55}$''']
+
+  [[rules.allowlists]]
+  description = """
+    The sample Sec-WebSocket-Key from RFC 6455 section 1.3 (base64 of "the
+    sample nonce"), used by a curl check of a WebSocket upgrade.
+  """
+  regexes = ['''^dGhlIHNhbXBsZSBub25jZQ==$''']
