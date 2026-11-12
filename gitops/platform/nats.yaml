@@ -122,7 +122,7 @@ spec:
                           - "orders.events.delivered"
                       subscribe:
                         allow: ["_INBOX.>"]
-                  - nkey: REPLACE_WITH_SQUARE_WORKER_PUBLIC_KEY # Square worker, Secret orderassist-nats-square-worker
+                  - nkey: UACFEX3A4BJH7W4QXCXE7F5WN7WSMKSIPHL4FYEA527M3GEAKATMEX72 # Square worker, Secret orderassist-nats-square-worker
                     permissions:
                       # As the print worker, for its own durable consumer
                       # `square`: it sends each order to Square from the cluster.
