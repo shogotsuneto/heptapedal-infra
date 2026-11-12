@@ -1,5 +1,5 @@
-# orderassist: a voice ordering assistant — its core and its voice agent,
-# released together as one chart. Wave 1, after its SealedSecrets at wave 0.
+# orderassist: a voice ordering assistant — its core, its voice agent and its
+# Square worker, released together as one chart. Wave 1, after its SealedSecrets at wave 0.
 #
 # The chart creates nothing it depends on. From this repository it needs:
 # the Secrets in this directory, the ORDERASSIST account in
@@ -24,12 +24,17 @@ spec:
     repoURL: ghcr.io/shogotsuneto/charts
     chart: orderassist
     # A release version, immutable (ADR 0011); dev versions are not deployed.
-    targetRevision: 0.2.0
+    targetRevision: 0.3.0
     helm:
       valuesObject:
         # Both images are private packages (ADR 0011).
         imagePullSecrets:
           - name: ghcr
+
+        # Sends each confirmed order to Square's sandbox, as its own NATS user;
+        # off in the chart by default.
+        squareWorker:
+          enabled: true
 
         # Attaches to the shared Gateway; the host is a subdomain, so the
         # wildcard listener. /ws goes to the voice agent, everything else to the
