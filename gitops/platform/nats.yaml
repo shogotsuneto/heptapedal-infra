@@ -122,6 +122,21 @@ spec:
                           - "orders.events.delivered"
                       subscribe:
                         allow: ["_INBOX.>"]
+                  - nkey: UACFEX3A4BJH7W4QXCXE7F5WN7WSMKSIPHL4FYEA527M3GEAKATMEX72 # Square worker, Secret orderassist-nats-square-worker
+                    permissions:
+                      # As the print worker, for its own durable consumer
+                      # `square`: it sends each order to Square from the cluster.
+                      publish:
+                        allow:
+                          - "$JS.API.STREAM.INFO.ORDERS"
+                          - "$JS.API.CONSUMER.INFO.ORDERS.square"
+                          - "$JS.API.CONSUMER.CREATE.ORDERS.square"
+                          - "$JS.API.CONSUMER.CREATE.ORDERS.square.>"
+                          - "$JS.API.CONSUMER.MSG.NEXT.ORDERS.square"
+                          - "$JS.ACK.ORDERS.square.>"
+                          - "orders.events.delivered"
+                      subscribe:
+                        allow: ["_INBOX.>"]
 
         container:
           env:

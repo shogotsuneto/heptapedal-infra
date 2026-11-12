@@ -224,13 +224,14 @@ for the same reason.
 ## orderassist
 
 A voice ordering assistant: its core and its voice agent, released together as
-one chart at `orderassist.heptapedal.com`. Its print worker runs at the
+one chart at `orderassist.heptapedal.com`, with its Square worker, which sends
+each confirmed order to Square's sandbox. Its print worker runs at the
 restaurant and comes in over `wss://nats.heptapedal.com`.
 
 | Wave | What |
 |---|---|
 | -1 | `orderassist` namespace |
-| 0 | five Secrets, and the `ghcr` pull credential |
+| 0 | seven Secrets, and the `ghcr` pull credential |
 | 1 | `orderassist` |
 
 The chart creates none of what it depends on. From this repository: the
@@ -391,7 +392,41 @@ fi
 unset GHCR_TOKEN
 ```
 
-**Check, then commit** the six files and `nats.yaml`:
+**7. The Square worker's NATS user.** As step 1, for this service alone, so
+the core's and the voice agent's keys are left as they are:
+
+```zsh
+keys=$(nats auth nkey gen user --public)
+kubectl create secret generic orderassist-nats-square-worker -n orderassist \
+  --dry-run=client -o yaml \
+  --from-literal=nats.nk="$(sed -n 1p <<<"$keys")" \
+  | seal orderassist-nats-square-worker \
+  && set_nkey "Secret orderassist-nats-square-worker" "$(sed -n 2p <<<"$keys")"
+unset keys
+```
+
+**8. The Square worker's access token and location.** From the Square
+Developer Console: the application's sandbox access token, and the ID of the
+sandbox location the orders are created at. The location is not a secret, but
+it identifies the account, so it is sealed with the token rather than written
+in `app.yaml`.
+
+```zsh
+read -rs 'SQUARE_ACCESS_TOKEN?Square sandbox access token: '; echo
+read -r 'SQUARE_LOCATION_ID?Square location ID: '
+if [[ -n $SQUARE_ACCESS_TOKEN && -n $SQUARE_LOCATION_ID ]]; then
+  kubectl create secret generic orderassist-square-worker -n orderassist \
+    --dry-run=client -o yaml \
+    --from-literal=SQUARE_ACCESS_TOKEN="$SQUARE_ACCESS_TOKEN" \
+    --from-literal=SQUARE_LOCATION_ID="$SQUARE_LOCATION_ID" \
+    | seal orderassist-square-worker
+else
+  echo "no token or no location; nothing sealed"
+fi
+unset SQUARE_ACCESS_TOKEN SQUARE_LOCATION_ID
+```
+
+**Check, then commit** the eight files and `nats.yaml`:
 
 ```zsh
 grep -c REPLACE_WITH gitops/platform/nats.yaml
@@ -402,7 +437,8 @@ for f in gitops/apps/orderassist/*.sealed.yaml; do kubeseal --validate < $f && e
 
 The first should print `0`. The second should list, by file: `DATABASE_URL`
 and `STAFF_PASSWORD`; `OPENAI_API_KEY`; `private.pem` and `public.pem`;
-`nats.nk` twice; and `.dockerconfigjson`. The third should print
+`nats.nk` three times; `SQUARE_ACCESS_TOKEN` and `SQUARE_LOCATION_ID`; and
+`.dockerconfigjson`. The third should print
 `kubernetes.io/dockerconfigjson`, and the loop should call every file valid,
 meaning this cluster's controller can decrypt it.
 
@@ -417,6 +453,7 @@ service that owns it, or is replaced by generating it again.
 | `DATABASE_URL` | Terraform state, `orderassist_database_url`; the role's password can be reset in the console |
 | `STAFF_PASSWORD` | the operator's password manager; a new one only signs staff out |
 | `OPENAI_API_KEY` | the OpenAI platform, where a new key is issued |
+| `SQUARE_ACCESS_TOKEN`, `SQUARE_LOCATION_ID` | the Square Developer Console, where the token can be replaced |
 | the conversation key pair | none: regenerating it ends the conversations under way, whose tokens it signed, and nothing else |
 | the NATS seeds | none: a new seed and its public key in `nats.yaml`, as for heptapedal's |
 | the print worker's seed | the device it runs on, never sealed |
@@ -431,9 +468,12 @@ curl -si --http1.1 https://orderassist.heptapedal.com/ws \
   -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
   -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' | head -1
 kubectl -n orderassist get httproute orderassist -o jsonpath='{.status.parents[0].conditions[*].type}'
+kubectl -n orderassist logs deploy/orderassist-square-worker | tail -3
 ```
 
-The core and the voice agent should be Running and Ready; `/healthz` should
+The core, the voice agent and the Square worker should be Running, the first
+two Ready; the Square worker's log should end with `consuming orders.confirmed
+from ORDERS as square`; `/healthz` should
 answer `{"nats":"ok","postgres":"ok"}`; a WebSocket opened on `/ws` without a
 conversation token should be refused with 403 by the voice agent (a plain GET
 there gets 404, since it serves only the WebSocket); and the route should be
