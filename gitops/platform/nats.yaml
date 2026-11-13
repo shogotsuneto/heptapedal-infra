@@ -101,16 +101,18 @@ spec:
                   - nkey: UA7U2DXLGRV6YCZQWRF2PZKQ3DR3SQXF72LSGAEPLFGLWY33WCCMXLDQ # core, Secret orderassist-nats-core
                   - nkey: UACRUFP2VZE77NBOHX5S6C77TKIDYZZMY4LMQTR2X7GLOLWFWPAZLOXJ # voice agent, Secret orderassist-nats-voice-agent
                     permissions:
-                      # The tool calls, and their replies on its inbox.
+                      # The tool calls, and their replies on its own inbox.
+                      # Each restricted user subscribes only to the reply prefix
+                      # its service sets, so none reads another's replies.
                       publish:
                         allow: ["orderassist.v1.>"]
                       subscribe:
-                        allow: ["_INBOX.>"]
+                        allow: ["_INBOX.voice-agent.>"]
                   - nkey: UBOTD475XOO6Y6FRNIUMBGVNOAZ7RGTOSOC66EIWO5VUULBR5J7WRRYY # print worker, on the restaurant's device
                     permissions:
                       # Its durable consumer `printer` on ORDERS, its
                       # acknowledgements, and its delivery events; the JetStream
-                      # API answers on its inbox.
+                      # API answers on its own inbox.
                       publish:
                         allow:
                           - "$JS.API.STREAM.INFO.ORDERS"
@@ -121,7 +123,7 @@ spec:
                           - "$JS.ACK.ORDERS.printer.>"
                           - "orders.events.delivered"
                       subscribe:
-                        allow: ["_INBOX.>"]
+                        allow: ["_INBOX.print-worker.>"]
                   - nkey: UACFEX3A4BJH7W4QXCXE7F5WN7WSMKSIPHL4FYEA527M3GEAKATMEX72 # Square worker, Secret orderassist-nats-square-worker
                     permissions:
                       # As the print worker, for its own durable consumer
@@ -136,7 +138,7 @@ spec:
                           - "$JS.ACK.ORDERS.square.>"
                           - "orders.events.delivered"
                       subscribe:
-                        allow: ["_INBOX.>"]
+                        allow: ["_INBOX.square-worker.>"]
 
         container:
           env:
