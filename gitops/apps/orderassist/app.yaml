@@ -24,7 +24,7 @@ spec:
     repoURL: ghcr.io/shogotsuneto/charts
     chart: orderassist
     # A release version, immutable (ADR 0011); dev versions are not deployed.
-    targetRevision: 0.3.0
+    targetRevision: 0.3.1
     helm:
       valuesObject:
         # Both images are private packages (ADR 0011).
