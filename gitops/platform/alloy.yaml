@@ -1,4 +1,5 @@
-# Telemetry to Grafana Cloud ([ADR 0010](../../docs/adr/0010-observability-grafana-cloud.md)).
+# Telemetry to Grafana Cloud ([ADR 0010](../../docs/adr/0010-observability-grafana-cloud.md)),
+# and applications' traces ([ADR 0018](../../docs/adr/0018-receive-application-traces.md)).
 #
 # The k8s-monitoring chart rather than the bare Alloy chart: Grafana Cloud's
 # Kubernetes dashboards expect a particular metric shape, and reproducing that
@@ -55,6 +56,26 @@ spec:
               create: false
               name: grafana-cloud
               namespace: monitoring
+          # Applications' traces (ADR 0018), through Grafana Cloud's OTLP gateway.
+          # Traces only: metrics and logs keep their own destinations above. Its
+          # own token, with traces:write alone, so revoking it touches nothing
+          # else; the OTLP instance ID is the username, read from the secret for
+          # the reason given above.
+          grafana-cloud-traces:
+            type: otlp
+            protocol: http
+            url: https://otlp-gateway-prod-ca-east-0.grafana.net/otlp
+            metrics: {enabled: false}
+            logs: {enabled: false}
+            traces: {enabled: true}
+            auth:
+              type: basic
+              usernameKey: otlp-username
+              passwordKey: traces-token
+            secret:
+              create: false
+              name: grafana-cloud
+              namespace: monitoring
 
         # Every feature is opt-in, so this list is the whole footprint.
         # Container and node resource metrics — the history that a live
@@ -74,9 +95,31 @@ spec:
           enabled: true
           collector: alloy-logs
 
+        # An OTLP/HTTP receiver for applications' traces (ADR 0018), on the
+        # metrics collector rather than one of its own: every Alloy pod is two
+        # containers, and the cluster is already near the free tier's
+        # container-hours (ADR 0017). Applications send to
+        # http://alloy-alloy-metrics.monitoring.svc:4318.
+        applicationObservability:
+          enabled: true
+          collector: alloy-metrics
+          destinations: [grafana-cloud-traces]
+          # Traces only; metrics and logs come from the cluster as before.
+          metrics: {enabled: false}
+          logs: {enabled: false}
+          # Keep the names the applications give their spans: by default the
+          # chart rewrites them to its semantic-convention version's.
+          traces:
+            setSpanNameSemanticConvention: ""
+          receivers:
+            otlp:
+              http:
+                enabled: true
+
         collectors:
           alloy-metrics:
-            presets: [small, statefulset]
+            # otel-receiver: the receiver's ports on the collector's Service.
+            presets: [small, statefulset, otel-receiver]
           alloy-logs:
             presets: [daemonset, filesystem-log-reader, small]
           # Cluster events only, so smaller than the preset would give it.
