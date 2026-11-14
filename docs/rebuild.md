@@ -80,7 +80,7 @@ deploys.
 | Secret | Where the value comes from |
 |---|---|
 | `cert-manager/digitalocean-dns` | DigitalOcean API token, `domain:read/create/delete` |
-| `monitoring/grafana-cloud` | Grafana Cloud, both instance IDs and the token |
+| `monitoring/grafana-cloud` | Grafana Cloud: the Prometheus and Loki instance IDs and their token, and the OTLP instance ID and the traces token |
 | `argocd/ghcr-charts` | GitHub classic PAT, `read:packages` |
 | `hepta/app-secrets` | `tofu output -raw database_url`, plus Supabase |
 | `hepta/ghcr` | the same classic PAT, as a docker-registry secret |

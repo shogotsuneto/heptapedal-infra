@@ -189,6 +189,21 @@ and `key` from this secret. Leaving them out is correct and is what the chart's
 own external-secrets example does: a missing key reads as empty, and Alloy
 treats empty TLS fields as unset.
 
+**Applications' traces** ([ADR 0018](../../docs/adr/0018-receive-application-traces.md))
+arrive over OTLP/HTTP at `http://alloy-alloy-metrics.monitoring.svc:4318` and go to
+Grafana Cloud's OTLP gateway with a token of their own. In Cloud Portal → Access
+Policies, create a policy with `traces:write` only and a token for it; the OTLP
+instance ID is on the stack's OpenTelemetry page, with the gateway URL that
+`alloy.yaml` names. Add both to the existing secret without resealing the rest:
+
+```bash
+kubectl create secret generic grafana-cloud -n monitoring \
+  --dry-run=client -o yaml \
+  --from-literal=otlp-username="$GC_OTLP_INSTANCE_ID" \
+  --from-literal=traces-token="$GC_TRACES_TOKEN" \
+  | kubeseal --format yaml --merge-into gitops/platform/grafana-cloud.sealed.yaml
+```
+
 **What it costs.** 375m CPU and 576Mi requested across five components: the
 Alloy DaemonSet for logs, a StatefulSet for metrics, a singleton for events,
 kube-state-metrics, and the Alloy operator. The chart sets requests on only two

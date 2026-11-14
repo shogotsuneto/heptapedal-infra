@@ -28,6 +28,7 @@ considered" section is the one that earns its keep.
 | [0015](0015-plan-locally.md) | Plan locally; CI validates but does not plan | Accepted |
 | [0016](0016-three-nodes.md) | Grow the node pool to three nodes | Accepted |
 | [0017](0017-nats.md) | Run one NATS cluster, an account per application, nkey authentication | Accepted |
+| [0018](0018-receive-application-traces.md) | Receive applications' traces on the metrics collector | Accepted |
 
 ## Statuses
 
