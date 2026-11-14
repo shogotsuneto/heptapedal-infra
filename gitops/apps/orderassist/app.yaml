@@ -24,7 +24,7 @@ spec:
     repoURL: ghcr.io/shogotsuneto/charts
     chart: orderassist
     # A release version, immutable (ADR 0011); dev versions are not deployed.
-    targetRevision: 0.3.1
+    targetRevision: 0.3.2
     helm:
       valuesObject:
         # Both images are private packages (ADR 0011).
@@ -35,6 +35,11 @@ spec:
         # off in the chart by default.
         squareWorker:
           enabled: true
+
+        # Traces, metadata only, to the metrics collector's OTLP receiver, which
+        # forwards them to Grafana Cloud (ADR 0018); off in the chart by default.
+        telemetry:
+          otlpEndpoint: http://alloy-alloy-metrics.monitoring.svc:4318
 
         # Attaches to the shared Gateway; the host is a subdomain, so the
         # wildcard listener. /ws goes to the voice agent, everything else to the
