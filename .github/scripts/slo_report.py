@@ -6,6 +6,8 @@ environment:
     GRAFANA_STACK_SLUG=<slug> GRAFANA_SLO_READ_TOKEN=<token> \
         python3 .github/scripts/slo_report.py docs/slo/reviews
 
+SLO_WEEK_END=YYYY-MM-DD selects an earlier week (see below).
+
 Prints the path of the file it wrote. Standard library only, so the workflow
 needs no install step.
 
@@ -87,7 +89,17 @@ def main() -> None:
         os.environ["GRAFANA_STACK_SLUG"], os.environ["GRAFANA_SLO_READ_TOKEN"]
     )
 
-    end = last_monday_midnight_utc(dt.datetime.now(dt.timezone.utc))
+    # SLO_WEEK_END backfills a week a failed run missed: any date in the week
+    # after it, usually that Monday. Grafana keeps 14 days, so only the last
+    # two weeks can be backfilled, and only until the data ages out.
+    week_end = os.environ.get("SLO_WEEK_END")
+    if week_end:
+        anchor = dt.datetime.fromisoformat(week_end).replace(tzinfo=dt.timezone.utc)
+    else:
+        anchor = dt.datetime.now(dt.timezone.utc)
+    end = last_monday_midnight_utc(anchor)
+    if end > dt.datetime.now(dt.timezone.utc):
+        sys.exit(f"{end.date()} is in the future; that week has not ended.")
     start = end - dt.timedelta(days=WINDOW_DAYS)
     window = f"[{WINDOW_DAYS}d]"
 

@@ -23,11 +23,15 @@ To review:
 An unmerged review stays open, so a skipped week is visible. Review weeks in
 order; a later week does not replace an earlier one.
 
-To regenerate or backfill by hand (Grafana keeps 14 days, so at most last week
-and the one before):
+The numbers are fetched and committed when the pull request is opened, so a
+late review loses nothing. What can lose a week is the **run itself failing**
+(an expired token, say). GitHub emails on a failed scheduled run. Grafana keeps
+14 days, so a missed week can be backfilled for about a week after it ended:
+Actions → slo-review → Run workflow, with `week_end` set to the Monday after the
+missed week. By hand:
 
 ```bash
-GRAFANA_STACK_SLUG=<slug> GRAFANA_SLO_READ_TOKEN=<token> \
+SLO_WEEK_END=2026-11-16 GRAFANA_STACK_SLUG=<slug> GRAFANA_SLO_READ_TOKEN=<token> \
   python3 -I .github/scripts/slo_report.py docs/slo/reviews
 ```
 

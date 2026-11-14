@@ -21,6 +21,13 @@ on:
     # the week at Monday 00:00 UTC, so a delayed run reports the same window.
     - cron: "0 0 * * 1"
   workflow_dispatch:
+    inputs:
+      week_end:
+        description: >-
+          Backfill: the Monday after the week to report (YYYY-MM-DD). Empty
+          means last week. Only the last two weeks are still in Grafana.
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -42,6 +49,7 @@ jobs:
         env:
           GRAFANA_STACK_SLUG: ${{ vars.GRAFANA_STACK_SLUG }}
           GRAFANA_SLO_READ_TOKEN: ${{ secrets.GRAFANA_SLO_READ_TOKEN }}
+          SLO_WEEK_END: ${{ inputs.week_end }}
         run: |
           path="$(python3 -I .github/scripts/slo_report.py docs/slo/reviews)"
           name="$(basename "$path" .md)"
