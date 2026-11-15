@@ -16,9 +16,11 @@ name: slo-review
 
 on:
   schedule:
-    # Monday 00:00 UTC, 09:00 in Japan: the start of the week, and four hours
-    # before Renovate's run so the two do not arrive together. The script ends
-    # the week at Monday 00:00 UTC, so a delayed run reports the same window.
+    # Monday 00:00 UTC, as soon as the week the script reports has ended. That
+    # is Sunday 17:00 in Vancouver (UTC-7 all year), so the pull request is
+    # waiting on Monday morning, and it arrives well before Renovate's run
+    # (Monday 13:00 UTC) so the two do not land together. The script ends the
+    # week at Monday 00:00 UTC, so a delayed run reports the same window.
     - cron: "0 0 * * 1"
   workflow_dispatch:
     inputs:
