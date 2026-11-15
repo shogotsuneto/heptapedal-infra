@@ -1,0 +1,101 @@
+# Open last week's SLO review as a pull request (ADR 0019).
+#
+# The pull request is the reminder. It arrives with the numbers filled in;
+# reviewing means writing two lines on what spent the budget and what changes
+# because of it, then merging. A review that is not done stays visible as an
+# open pull request, unlike a dashboard nobody opened.
+#
+# Read-only towards Grafana. The token is a Viewer service account in its own
+# environment, `slo-review`, so this job never sees the write credentials in
+# `production`. See docs/slo/README.md for the setup.
+#
+# Opened with GITHUB_TOKEN, as Renovate is, so the same trade applies: `check`
+# waits for an "Approve workflows to run" click on the pull request (see
+# renovate.yml).
+name: slo-review
+
+on:
+  schedule:
+    # Monday 00:00 UTC, 09:00 in Japan: the start of the week, and four hours
+    # before Renovate's run so the two do not arrive together. The script ends
+    # the week at Monday 00:00 UTC, so a delayed run reports the same window.
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+    inputs:
+      week_end:
+        description: >-
+          Backfill: the Monday after the week to report (YYYY-MM-DD). Empty
+          means last week. Only the last two weeks are still in Grafana.
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: slo-review
+  cancel-in-progress: false
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    environment: slo-review
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Write the review file
+        id: report
+        env:
+          GRAFANA_STACK_SLUG: ${{ vars.GRAFANA_STACK_SLUG }}
+          GRAFANA_SLO_READ_TOKEN: ${{ secrets.GRAFANA_SLO_READ_TOKEN }}
+          SLO_WEEK_END: ${{ inputs.week_end }}
+        run: |
+          path="$(python3 -I .github/scripts/slo_report.py docs/slo/reviews)"
+          name="$(basename "$path" .md)"
+          {
+            echo "path=$path"
+            echo "name=$name"
+            echo "branch=slo-review/$name"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Open the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FILE: ${{ steps.report.outputs.path }}
+          NAME: ${{ steps.report.outputs.name }}
+          BRANCH: ${{ steps.report.outputs.branch }}
+        run: |
+          # A re-run for a week that already has a pull request should leave it
+          # alone: it may already hold the hand-written half.
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null; then
+            echo "$BRANCH already exists; nothing to do."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git add "$FILE"
+          git commit -m "docs(slo): review $NAME"
+          git push origin "$BRANCH"
+
+          # What changed in the same week, for matching spend to its cause.
+          # Renovate's bumps included: they are changes too.
+          start="$(sed -n 's/^\([0-9-]*\) to .*/\1/p' "$FILE")"
+          merged="$(gh pr list --state merged --limit 100 \
+            --search "merged:>=$start" \
+            --json number,title --jq '.[] | "- #\(.number) \(.title)"')"
+
+          printf '%s\n' \
+            "Last week's numbers are in \`$FILE\`. To review:" \
+            "" \
+            "1. Read the numbers and the policy line." \
+            "2. Fill in the two lines under **Review** in the file, on this branch." \
+            "3. Merge." \
+            "" \
+            "Pull requests merged since $start, which may explain any spend:" \
+            "" \
+            "${merged:-none}" > "$RUNNER_TEMP/body.md"
+          gh pr create --base main --head "$BRANCH" \
+            --title "docs(slo): review $NAME" --body-file "$RUNNER_TEMP/body.md"

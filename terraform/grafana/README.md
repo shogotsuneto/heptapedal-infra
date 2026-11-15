@@ -11,7 +11,7 @@ Alloy already ships and turns four of them into things that will wake somebody.
 1. **A Grafana service account token.** Grafana Cloud → Administration → Users
    and access → Service accounts. Export as `GRAFANA_AUTH`.
 
-   Basic role **Viewer** (or none), plus these three. Search the role picker by
+   Basic role **Viewer** (or none), plus these four. Search the role picker by
    the identifier — the display names vary and the identifiers do not.
 
    | Fixed role | For |
@@ -19,6 +19,7 @@ Alloy already ships and turns four of them into things that will wake somebody.
    | `fixed:alerting.provisioning:writer` | the rule group, contact point and notification policy |
    | `fixed:folders:writer` | `grafana_folder` — alert rules always live in a folder. It also carries the dashboard permissions, so dashboards need no role of their own |
    | `fixed:datasources:reader` | looking up the Prometheus and Loki data source UIDs by name |
+   | SLO → **SLO Writer** | `grafana_slo` ([ADR 0019](../../docs/adr/0019-slo-and-error-budget.md)). A plugin role, so search the picker for `slo` rather than `fixed:` |
 
    Two of those are easy to get wrong, and both were:
 

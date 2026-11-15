@@ -29,6 +29,7 @@ considered" section is the one that earns its keep.
 | [0016](0016-three-nodes.md) | Grow the node pool to three nodes | Accepted |
 | [0017](0017-nats.md) | Run one NATS cluster, an account per application, nkey authentication | Accepted |
 | [0018](0018-receive-application-traces.md) | Receive applications' traces on the metrics collector | Accepted |
+| [0019](0019-slo-and-error-budget.md) | Start with one availability SLO, measured by the external probe | Accepted |
 
 ## Statuses
 
