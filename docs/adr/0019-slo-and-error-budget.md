@@ -1,6 +1,6 @@
 # 0019. Start with one availability SLO, measured by the external probe
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-14
 
 ## Context
