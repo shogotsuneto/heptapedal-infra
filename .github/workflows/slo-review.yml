@@ -81,10 +81,13 @@ jobs:
           git push origin "$BRANCH"
 
           # What changed in the same week, for matching spend to its cause.
-          # Renovate's bumps included: they are changes too.
+          # Renovate's bumps included: they are changes too. Bounded at both
+          # ends: a run on Monday, or a backfill, would otherwise list what was
+          # merged after the week as well.
           start="$(sed -n 's/^\([0-9-]*\) to .*/\1/p' "$FILE")"
+          last="$(sed -n 's/^[0-9-]* to \([0-9-]*\) .*/\1/p' "$FILE")"
           merged="$(gh pr list --state merged --limit 100 \
-            --search "merged:>=$start" \
+            --search "merged:$start..$last" \
             --json number,title --jq '.[] | "- #\(.number) \(.title)"')"
 
           printf '%s\n' \
@@ -94,7 +97,7 @@ jobs:
             "2. Fill in the two lines under **Review** in the file, on this branch." \
             "3. Merge." \
             "" \
-            "Pull requests merged since $start, which may explain any spend:" \
+            "Pull requests merged from $start to $last (UTC), which may explain any spend:" \
             "" \
             "${merged:-none}" > "$RUNNER_TEMP/body.md"
           gh pr create --base main --head "$BRANCH" \
