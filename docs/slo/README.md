@@ -6,8 +6,11 @@ one file per week in [`reviews/`](reviews/), named by ISO week
 
 ## How a review happens
 
-Every Monday at 00:00 UTC, [`slo-review`](../../.github/workflows/slo-review.yml)
-opens a pull request with the previous week's file. The numbers in it are
+Every Monday shortly after 00:00 UTC (Sunday evening in Vancouver),
+[`slo-review`](../../.github/workflows/slo-review.yml) opens a pull request
+with the previous week's file. GitHub can start a scheduled run hours late. If
+none has arrived by Monday evening UTC, run it by hand (Actions → slo-review →
+Run workflow, `week_end` empty): the week is the same either way. The numbers in it are
 generated from the same probe counters the SLO is defined on. The PR body also
 lists the pull requests merged that week.
 
