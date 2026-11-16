@@ -16,12 +16,20 @@ name: slo-review
 
 on:
   schedule:
-    # Monday 00:00 UTC, as soon as the week the script reports has ended. That
-    # is Sunday 17:00 in Vancouver (UTC-7 all year), so the pull request is
-    # waiting on Monday morning, and it arrives well before Renovate's run
-    # (Monday 13:00 UTC) so the two do not land together. The script ends the
-    # week at Monday 00:00 UTC, so a delayed run reports the same window.
-    - cron: "0 0 * * 1"
+    # Monday 00:17 UTC, shortly after the week the script reports has ended.
+    # That is Sunday 17:17 in Vancouver (UTC-7 all year), so the pull request
+    # should be waiting on Monday morning.
+    #
+    # Seventeen minutes past rather than on the hour. GitHub starts scheduled
+    # runs late when it is busy, and drops some, and the top of the hour, above
+    # all midnight UTC, is when it is busiest. Here even Renovate's 13:00 run
+    # has started six to ten hours late. Off the hour makes that less likely,
+    # not impossible.
+    #
+    # The delay changes nothing in the numbers: the script ends the week at
+    # Monday 00:00 UTC whenever it runs. A run that never comes is a manual
+    # run away (see docs/slo/README.md).
+    - cron: "17 0 * * 1"
   workflow_dispatch:
     inputs:
       week_end:
