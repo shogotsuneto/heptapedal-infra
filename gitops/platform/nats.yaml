@@ -170,8 +170,14 @@ spec:
           # that node takes quorum with it, which is the failure the cluster
           # exists to survive. A fourth replica would sit Pending, which is the
           # right signal.
+          #
+          # The anti-affinity leaves each member only one eligible node, so a
+          # member can be locked out by ordinary Pods that got there first
+          # (after a node pool recycle, say). The priority lets it evict them
+          # instead of waiting; see priority-classes.yaml.
           merge:
             spec:
+              priorityClassName: platform-critical
               affinity:
                 podAntiAffinity:
                   requiredDuringSchedulingIgnoredDuringExecution:
