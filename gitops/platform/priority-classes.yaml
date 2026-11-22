@@ -1,0 +1,31 @@
+# Scheduling priority for the platform's own stateful members.
+#
+# Wave -1, ahead of anything that names it: a Pod referring to a PriorityClass
+# that does not exist yet is rejected at admission, not left Pending.
+#
+# Why it exists: after the node pool was recycled on 2026-11-22, the Pods that
+# came back first packed one node to 99% of its memory requests while another
+# sat at 24%. nats-1, whose hard anti-affinity leaves it exactly one eligible
+# node, stayed Pending for nearly four hours, and the Raft group ran on two of
+# three members. The scheduler never moves a placed Pod, and with every Pod at
+# priority 0 it found no preemption victims either.
+#
+# With this, a Pending NATS member evicts ordinary (priority 0) Pods from its
+# one eligible node; they reschedule wherever there is room. That only helps
+# while the cluster as a whole has room — ADR 0016's "everything still fits
+# after losing a node" — otherwise the evicted Pod is the one left Pending.
+# Preemption honours PodDisruptionBudgets only on a best-effort basis.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: platform-critical
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+# Far below DigitalOcean's system-cluster-critical (2000000000), so the
+# cluster's own add-ons still outrank it.
+value: 1000000
+globalDefault: false
+preemptionPolicy: PreemptLowerPriority
+description: >-
+  Platform state whose loss costs quorum (the NATS members). May preempt
+  ordinary workloads.

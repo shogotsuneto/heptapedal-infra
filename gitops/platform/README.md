@@ -416,6 +416,13 @@ NATS turns authentication off and accepts anyone, and the route makes that the
 Internet. `SANDBOX` holds the laptop's key partly so that is never one deletion
 away.
 
+**The members run at `platform-critical` priority** (`priority-classes.yaml`).
+Each has exactly one eligible node, so a member that finds that node full of
+ordinary Pods preempts them rather than sitting Pending; they move to a node
+with room. If they cannot, they are the ones left Pending — check
+`kubectl get pods -A --field-selector=status.phase=Pending` after any node
+recycle.
+
 Adding or removing a key is a commit: the chart's reloader sends the server a
 `SIGHUP`, nothing restarts, and a removed key's open connections are closed at
 that moment rather than at their next reconnect.
